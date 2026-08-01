@@ -1,0 +1,12 @@
+# Build-Ergebnisse
+build/
+.gradle/
+.kotlin/
+
+# Lokale Umgebung - enthaelt den Pfad zum Android-SDK dieses Rechners
+local.properties
+
+# IDE
+.idea/
+*.iml
+captures/

@@ -1,0 +1,108 @@
+package de.emmpunkt.write.core.debug
+
+import de.emmpunkt.write.core.font.Fonts
+import de.emmpunkt.write.core.gcode.MachineProfile
+import de.emmpunkt.write.core.gcode.toPlotJob
+import de.emmpunkt.write.core.layout.Align
+import de.emmpunkt.write.core.layout.Frame
+import de.emmpunkt.write.core.layout.Margins
+import de.emmpunkt.write.core.layout.TextStyle
+import de.emmpunkt.write.core.layout.layoutText
+import java.io.File
+import kotlin.test.Test
+import kotlin.test.assertTrue
+
+/**
+ * Erzeugt Musterbilder aus fertigem G-Code nach core/build/preview/.
+ *
+ * Kein Testfall im engeren Sinn, sondern die Sichtpruefung ohne Plotter: die Bilder zeigen,
+ * was der Stift faehrt. Schriftbild, Umlaute und Zeilenfall lassen sich so beurteilen, bevor
+ * Papier verbraucht wird.
+ */
+class PreviewSamplesTest {
+
+    private val profile = MachineProfile(zUpMm = 3f, zDownMm = -1.5f, workAreaXMm = 300f, workAreaYMm = 300f)
+    private val penDownZ = (profile.zUpMm + profile.zDownMm) / 2f
+    private val outDir = File("build/preview")
+
+    private fun render(
+        name: String,
+        text: String,
+        style: TextStyle,
+        frame: Frame,
+        showTravel: Boolean = false,
+    ): File {
+        val font = Fonts.load(style.fontId)
+        val laid = layoutText(text, style, frame, font)
+        val job = laid.toPlotJob(profile)
+        val target = File(outDir, "$name.png")
+        GCodeRenderer.renderPng(
+            lines = job.lines,
+            penDownZ = penDownZ,
+            widthMm = frame.widthMm,
+            heightMm = frame.heightMm,
+            target = target,
+            pixelsPerMm = 8,
+            showTravel = showTravel,
+        )
+        println("$name: ${GCodeRenderer.summary(job.lines, penDownZ)}, ${job.penDownCount} Huebe, " +
+            "ca. ${job.estimatedSeconds.toInt()} s, Ueberlauf=${laid.overflow}")
+        return target
+    }
+
+    @Test
+    fun `Schriftmetriken ausgeben`() {
+        println("Schrift            cap  asc  desc lineH  space  space/cap")
+        Fonts.available.forEach { e ->
+            val f = Fonts.load(e.id)
+            val space = f.glyph(' '.code)!!.advance
+            println(
+                String.format(
+                    java.util.Locale.ROOT,
+                    "%-18s %4.1f %4.1f %5.1f %5.1f %6.1f %8.2f",
+                    e.id, f.capHeightUnits, f.ascenderUnits, f.descenderUnits,
+                    f.lineHeightUnits, space, space / f.capHeightUnits,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `Musterbilder erzeugen`() {
+        val a6 = Frame(widthMm = 105f, heightMm = 148f, margins = Margins.all(10f))
+
+        // Zeichensatz mit allen deutschen Sonderzeichen.
+        val zeichensatz = "Hallo Welt\näöüß ÄÖÜ\n0123456789\n,.;:!?-()€"
+        render("01-zeichensatz-script", zeichensatz, TextStyle("script-simplex", sizeMm = 8f), a6)
+        render("02-zeichensatz-sans", zeichensatz, TextStyle("sans", sizeMm = 8f), a6)
+
+        // Eine echte Notiz, wie sie in der App entstehen wuerde.
+        val notiz = "Einkaufsliste\n\nMilch, Brot, Kaffee\nButter und Eier\n\nam Samstag abholen"
+        render("03-notiz-script", notiz, TextStyle("script-simplex", sizeMm = 7f), a6)
+        render("04-notiz-script-zentriert", notiz, TextStyle("script-simplex", sizeMm = 7f, align = Align.CENTER), a6)
+
+        // Alle vier Schriften im Vergleich.
+        val probe = "Handschrift 123 äöüß"
+        Fonts.available.forEachIndexed { i, entry ->
+            render("05-${i}-${entry.id}", probe, TextStyle(entry.id, sizeMm = 9f), Frame(120f, 30f, Margins.all(5f)))
+        }
+
+        // Leerfahrten sichtbar: zeigt, ob die Pfadsortierung sinnvolle Wege waehlt.
+        render("06-leerfahrten", "Milch Brot Kaffee", TextStyle("script-simplex", sizeMm = 10f),
+            Frame(105f, 40f, Margins.all(8f)), showTravel = true)
+
+        // Striche im Vergleich zu Kleinbuchstaben.
+        render("08-striche", "neben-an nn-nn\nGedanke – Strich\nnenne o-o e-e",
+            TextStyle("script-simplex", sizeMm = 9f), Frame(120f, 60f, Margins.all(5f)))
+        render("09-striche-sans", "neben-an nn-nn\nGedanke – Strich",
+            TextStyle("sans", sizeMm = 9f), Frame(120f, 45f, Margins.all(5f)))
+
+        // Neigung und Laufweite.
+        render("07-feintuning", "Kursiv gestellt", TextStyle("script-simplex", sizeMm = 10f, slantDeg = 12f, letterSpacing = 0.15f),
+            Frame(120f, 30f, Margins.all(5f)))
+
+        val erzeugt = outDir.listFiles { f: File -> f.extension == "png" }?.size ?: 0
+        assertTrue(erzeugt >= 10, "Es wurden nur $erzeugt Musterbilder erzeugt")
+        println("Musterbilder in ${outDir.absolutePath}")
+    }
+}
