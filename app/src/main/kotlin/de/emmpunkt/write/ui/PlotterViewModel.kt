@@ -7,7 +7,9 @@ import de.emmpunkt.write.core.font.Fonts
 import de.emmpunkt.write.core.gcode.PlotJob
 import de.emmpunkt.write.core.gcode.toPlotJob
 import de.emmpunkt.write.core.layout.LaidOutText
+import de.emmpunkt.write.core.layout.fitSize
 import de.emmpunkt.write.core.layout.layoutText
+import java.util.Locale
 import de.emmpunkt.write.data.AppSettings
 import de.emmpunkt.write.data.PlotWakeLock
 import de.emmpunkt.write.data.SettingsRepository
@@ -89,6 +91,54 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
         _settings.update(transform)
         recompute()
         persist()
+    }
+
+    /**
+     * Waehrend eines Reglerzugs: Zustand und Vorschau nachfuehren, aber nichts speichern.
+     *
+     * Ein Zug loest dutzende Wertaenderungen aus. Wuerde jede davon in DataStore geschrieben,
+     * schriebe die App waehrend eines einzigen Fingerstrichs dutzende Male auf den Speicher -
+     * und ein abgebrochener Zug hinterliesse trotzdem einen gespeicherten Wert.
+     */
+    fun updateSettingsLive(transform: (AppSettings) -> AppSettings) {
+        _settings.update(transform)
+        recompute()
+    }
+
+    /** Beim Loslassen: den erreichten Wert einmal sichern. */
+    fun commitSettings() = persist()
+
+    /**
+     * Setzt die groesste Schriftgroesse, bei der die Notiz sauber in den Rahmen passt.
+     *
+     * Findet sich keine, bleibt die Groesse stehen und die App sagt es. Stillschweigend die
+     * Untergrenze zu setzen waere schlimmer als nichts zu tun: der Text liefe weiter ueber,
+     * nur in unlesbarer Groesse.
+     */
+    fun autoFit() {
+        val text = _text.value
+        if (text.isBlank()) return
+
+        val s = _settings.value
+        val ergebnis = runCatching {
+            fitSize(text, s.toTextStyle(), s.toFrame(), Fonts.load(s.fontId))
+        }.getOrElse { e ->
+            _machine.update { it.copy(message = "Einpassen nicht moeglich: ${e.message}") }
+            return
+        }
+
+        if (!ergebnis.fits) {
+            val minimum = String.format(Locale.GERMANY, "%.1f", ergebnis.sizeMm)
+            _machine.update {
+                it.copy(
+                    message = "Passt auch bei $minimum mm nicht – Rand verkleinern, " +
+                        "Text kürzen oder einen Bindestrich setzen.",
+                )
+            }
+            return
+        }
+
+        updateSettings { it.copy(sizeMm = ergebnis.sizeMm) }
     }
 
     /**
