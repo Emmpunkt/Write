@@ -7,6 +7,7 @@ import de.emmpunkt.write.core.layout.Align
 import de.emmpunkt.write.core.layout.Frame
 import de.emmpunkt.write.core.layout.Margins
 import de.emmpunkt.write.core.layout.TextStyle
+import de.emmpunkt.write.core.layout.fitSize
 import de.emmpunkt.write.core.layout.layoutText
 import java.io.File
 import kotlin.test.Test
@@ -101,8 +102,32 @@ class PreviewSamplesTest {
         render("07-feintuning", "Kursiv gestellt", TextStyle("script-simplex", sizeMm = 10f, slantDeg = 12f, letterSpacing = 0.15f),
             Frame(120f, 30f, Margins.all(5f)))
 
+        // Die vier Feintuning-Regler in ihren Randlagen - so laesst sich am Bildschirm
+        // entscheiden, ob die Bereiche der Regler brauchbar gewaehlt sind.
+        val muster = "Handschrift wird hier\nueber zwei Zeilen gesetzt"
+        val reglerRahmen = Frame(120f, 55f, Margins.all(5f))
+        val varianten = listOf(
+            "10-laufweite-eng" to TextStyle("script-simplex", sizeMm = 7f, letterSpacing = -0.2f),
+            "11-laufweite-weit" to TextStyle("script-simplex", sizeMm = 7f, letterSpacing = 0.5f),
+            "12-wortabstand-eng" to TextStyle("script-simplex", sizeMm = 7f, wordSpacing = -0.6f),
+            "13-wortabstand-weit" to TextStyle("script-simplex", sizeMm = 7f, wordSpacing = 1.0f),
+            "14-zeilen-eng" to TextStyle("script-simplex", sizeMm = 7f, lineSpacing = 0.8f),
+            "15-zeilen-weit" to TextStyle("script-simplex", sizeMm = 7f, lineSpacing = 2.0f),
+            "16-neigung-links" to TextStyle("script-simplex", sizeMm = 7f, slantDeg = -20f),
+            "17-neigung-rechts" to TextStyle("script-simplex", sizeMm = 7f, slantDeg = 20f),
+        )
+        varianten.forEach { (name, stil) -> render(name, muster, stil, reglerRahmen) }
+
+        // Was "Einpassen" aus einem zu langen Text macht.
+        val zuViel = "Einkaufsliste fuer Samstag: Milch, Brot, Kaffee, Butter und Eier. " +
+            "Danach zur Post und das Paket abholen, es liegt seit Dienstag dort."
+        val a6quer = Frame(148f, 105f, Margins.all(8f))
+        val eingepasst = fitSize(zuViel, TextStyle("script-simplex"), a6quer, Fonts.load("script-simplex"))
+        render("18-eingepasst", zuViel, TextStyle("script-simplex", sizeMm = eingepasst.sizeMm), a6quer)
+        println("Eingepasst auf ${eingepasst.sizeMm} mm (passt=${eingepasst.fits})")
+
         val erzeugt = outDir.listFiles { f: File -> f.extension == "png" }?.size ?: 0
-        assertTrue(erzeugt >= 10, "Es wurden nur $erzeugt Musterbilder erzeugt")
+        assertTrue(erzeugt >= 19, "Es wurden nur $erzeugt Musterbilder erzeugt")
         println("Musterbilder in ${outDir.absolutePath}")
     }
 }
