@@ -306,6 +306,10 @@ class SvgFontTest {
     fun `mitgelieferte SVG-Schriften koennen deutsche Notizen`() {
         val noetig = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789äöüÄÖÜß.,;:!?-()€"
         listOf("allure", "zierschrift", "druckschrift", "einladung").forEach { id ->
+            // Ohne diese Zusicherung prueft der Test die falsche Schrift: Fonts.entry faellt
+            // bei unbekanntem Bezeichner still auf die Vorgabe zurueck, und deren
+            // Overlay-Schicht deckt dieselben Sonderzeichen ab.
+            assertEquals(id, Fonts.entry(id).id, "$id muss ein eigener Eintrag sein")
             val font = Fonts.load(id)
             noetig.forEach { ch ->
                 assertTrue(font.has(ch.code), "$id: Zeichen '$ch' fehlt")
@@ -318,6 +322,8 @@ class SvgFontTest {
     @Test
     fun `abgeleitete Versalhoehe entspricht der gemessenen Hoehe des H`() {
         listOf("allure", "zierschrift", "druckschrift", "einladung").forEach { id ->
+            // Siehe oben: ohne das pruefte der Test die Vorgabeschrift statt der gemeinten.
+            assertEquals(id, Fonts.entry(id).id, "$id muss ein eigener Eintrag sein")
             val font = Fonts.load(id)
             val h = assertNotNull(font.glyph('H'.code))
             val gemessen = h.strokes.flatMap { it.points }.maxOf { it.y }
@@ -484,13 +490,16 @@ Run: `./gradlew :core:test --tests '*SvgFontTest*'`
 
 Expected: **6 bestanden, 2 fehlgeschlagen.** Fehlschlagen muessen genau
 `mitgelieferte SVG-Schriften koennen deutsche Notizen` und
-`abgeleitete Versalhoehe entspricht der gemessenen Hoehe des H` – sie brauchen die
-Schriftdateien, die erst Task 4 aufnimmt. Bis dahin faellt `Fonts.load("allure")` auf die
-Vorgabeschrift zurueck, und die Zusicherungen greifen.
+`abgeleitete Versalhoehe entspricht der gemessenen Hoehe des H`, jeweils an der Zusicherung
+`… muss ein eigener Eintrag sein` – die Schriften nimmt erst Task 4 auf.
 
-Schlaegt einer der uebrigen sechs fehl, ist das ein echter Fehler im Parser. Bestehen dagegen
-alle acht, stimmt etwas nicht – dann pruefe, ob `Fonts.available` wider Erwarten schon
-Eintraege mit diesen Bezeichnern hat.
+**Warum diese Zusicherung noetig ist:** `Fonts.entry` faellt bei unbekanntem Bezeichner still
+auf die Vorgabeschrift zurueck. Ohne die Pruefung wuerden beide Tests die Hershey-Schreibschrift
+laden und trotzdem bestehen – deren Overlay-Schicht kennt Umlaute, Eszett und Euro ebenfalls,
+und die Versalhoehe leitet `FontMetrics` fuer jedes Format aus `H` ab. Ein Test, der auch ohne
+seinen Pruefgegenstand besteht, ist wertlos.
+
+Schlaegt einer der uebrigen sechs fehl, ist das ein echter Fehler im Parser.
 
 - [ ] **Step 5: Commit**
 
