@@ -68,6 +68,10 @@ class GlyphOverlayFont(
         }
 
         SUBSTITUTIONS[codePoint]?.let { replacement ->
+            // STRICHE[replacement] ist derzeit unerreichbar: kein Wert in SUBSTITUTIONS ('", `,, etc.)
+            // ist ein Schluessel in STRICHE (-, U+2010, U+2013, U+2014, U+2212). Der if-Schalter
+            // bleibt defensiv fuer den Fall, dass spaeter eine Ersetzung auf einen Strich zeigt -
+            // dann muss sie automatisch korrekt auf den Schalter hoeren, ohne erneute Aenderung.
             return (if (stricheErsetzen) STRICHE[replacement]?.let { drawDash(it) } else null)
                 ?: base.glyph(replacement)
         }

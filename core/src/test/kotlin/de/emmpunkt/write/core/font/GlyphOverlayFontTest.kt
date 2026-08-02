@@ -93,10 +93,12 @@ class GlyphOverlayFontTest {
 
     @Test
     fun `laesst den Strich der Basisschrift stehen, wenn die Korrektur aus ist`() {
-        val basis = Fonts.load("sans")
-        val eigen = assertNotNull(basis.glyph('-'.code))
+        // Nutze den Raw HersheyFont direkt, damit die Korrektur messbar ist.
+        val content = readResource("fonts/futural.jhf")
+        val basisRaw = HersheyFont.parse("sans", "Technisch", content)
+        val eigen = assertNotNull(basisRaw.glyph('-'.code))
 
-        val ohneKorrektur = GlyphOverlayFont(basis, stricheErsetzen = false)
+        val ohneKorrektur = GlyphOverlayFont(basisRaw, stricheErsetzen = false)
         val durchgereicht = assertNotNull(ohneKorrektur.glyph('-'.code))
 
         assertEquals(eigen.advance, durchgereicht.advance)
