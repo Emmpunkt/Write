@@ -319,4 +319,57 @@ class EinlaufKorrekturTest {
             }
         }
     }
+
+    @Test
+    fun `korrigiert jede Zeile einzeln statt den ganzen Block zu verschieben`() {
+        // Gemessen in Allure: 'j' beginnt bei -387 Einheiten (Einlaufstrich), 'D' dagegen bei
+        // +85 - eine Zeile braucht die Korrektur also, die andere nicht. Wuerde der Ausgleich
+        // ueber alle Zeilen gemeinsam gerechnet, ruecke die 'D'-Zeile unnoetig mit ein und
+        // stuende sichtbar zu weit rechts.
+        val rahmen = Frame(widthMm = 105f, heightMm = 148f, margins = Margins.all(10f))
+        val stil = TextStyle(fontId = "allure", sizeMm = 15f)
+
+        val gemischt = layoutText("jubel\nDach", stil, rahmen, schrift)
+        val (mitEinlauf, ohneEinlauf) = gemischt.lines.map { zeile ->
+            zeile.strokes.flatMap { it.points }.minOf { it.x }
+        }
+
+        // Die 'j'-Zeile wurde bis genau auf den Rand geschoben.
+        assertTrue(
+            abs(mitEinlauf - rahmen.margins.left) < 0.01f,
+            "Zeile mit Einlaufstrich sitzt nicht am Rand: $mitEinlauf statt ${rahmen.margins.left} mm",
+        )
+
+        // Die 'D'-Zeile muss dort stehen, wo sie auch allein stuende - unbeeinflusst davon,
+        // dass eine andere Zeile im selben Text korrigiert wurde.
+        val allein = layoutText("Dach", stil, rahmen, schrift)
+            .strokes.flatMap { it.points }.minOf { it.x }
+        assertTrue(
+            abs(ohneEinlauf - allein) < 0.001f,
+            "Zeile ohne Einlaufstrich wurde mitverschoben: $ohneEinlauf statt $allein mm",
+        )
+    }
+
+    @Test
+    fun `Zeilenbreite bleibt die Vorschubbreite und nicht die Ausdehnung der Striche`() {
+        // Der Umbruch rechnet mit widthMm. Wuerde diese Breite nach der Einlaufkorrektur aus den
+        // Strichen gemessen statt vorher aus den Vorschueben, aenderten sich mit dem Fix auch die
+        // Umbruchstellen - bei Schreibschriften betraechtlich, weil sich die Buchstaben
+        // ueberlappen. Gegenprobe ohne Formelwiederholung: die Breite eines Wortes muss die Summe
+        // der Einzelbreiten seiner Buchstaben sein. Fuer Vorschubbreiten gilt das exakt, fuer
+        // eine aus den Strichen gemessene Ausdehnung nicht.
+        val rahmen = Frame(widthMm = 300f, heightMm = 148f, margins = Margins.all(10f))
+        val stil = TextStyle(fontId = "allure", sizeMm = 15f)
+        val wort = "jubel"
+
+        val ganz = layoutText(wort, stil, rahmen, schrift).lines.first().widthMm
+        val summe = wort.sumOf { zeichen ->
+            layoutText(zeichen.toString(), stil, rahmen, schrift).lines.first().widthMm.toDouble()
+        }.toFloat()
+
+        assertTrue(
+            abs(ganz - summe) < 0.01f,
+            "Zeilenbreite ist nicht mehr die Vorschubbreite: $ganz mm statt $summe mm",
+        )
+    }
 }
