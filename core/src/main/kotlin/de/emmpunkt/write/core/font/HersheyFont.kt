@@ -40,62 +40,32 @@ class HersheyFont private constructor(
          */
         private const val FIRST_CODE_POINT = 32
 
-        /**
-         * Referenzglyphen zur Bestimmung von Grundlinie und Versalhoehe, in dieser Reihenfolge.
-         * Aus den Daten abgeleitet statt fest verdrahtet, weil die Hershey-Schriften
-         * unterschiedliche Zeichenhoehen benutzen.
-         */
-        private val REFERENCE_GLYPHS = listOf('H'.code, 'A'.code, 'X'.code, 'x'.code)
-
-        /** Buchstaben mit Oberlaenge - bestimmen die obere Haelfte der Zeilenhoehe. */
-        private val ASCENDER_GLYPHS = listOf('h'.code, 'l'.code, 'b'.code, 'd'.code, 'k'.code)
-
-        /** Buchstaben mit Unterlaenge - bestimmen die untere Haelfte der Zeilenhoehe. */
-        private val DESCENDER_GLYPHS = listOf('g'.code, 'p'.code, 'q'.code, 'y'.code, 'j'.code)
-
-        /** Groesstes bzw. kleinstes Y ueber den angegebenen Glyphen, oder null wenn keine da ist. */
-        private fun extremeY(glyphs: Map<Int, Glyph>, codePoints: List<Int>, max: Boolean): Float? {
-            val ys = codePoints.mapNotNull { glyphs[it] }
-                .flatMap { g -> g.strokes.flatMap { it.points } }
-                .map { it.y }
-            if (ys.isEmpty()) return null
-            return if (max) ys.max() else ys.min()
-        }
+        /** Dieselben Glyphen wie in [FontMetrics], hier nur zur Bestimmung der Grundlinie. */
+        private val BASELINE_REFERENCE = listOf('H'.code, 'A'.code, 'X'.code, 'x'.code)
 
         fun parse(id: String, displayName: String, content: String): HersheyFont {
             val rawGlyphs = parseLines(content.lines())
 
-            val reference = REFERENCE_GLYPHS.firstNotNullOfOrNull { rawGlyphs[it] }
+            // Die Grundlinie bestimmen: in JHF-Koordinaten (Y nach unten) ist sie die
+            // UNTERkante der Referenzglyphe, also ihr groesstes Y. Das muss vor der
+            // Verschiebung geschehen und ist deshalb JHF-eigen; alles Weitere kann
+            // FontMetrics auf den fertigen Glyphen ableiten.
+            val reference = BASELINE_REFERENCE.firstNotNullOfOrNull { rawGlyphs[it] }
                 ?: error("Schrift '$id' enthaelt keine der Referenzglyphen H/A/X/x")
             val referencePoints = reference.strokes.flatMap { it.points }
             require(referencePoints.isNotEmpty()) { "Referenzglyphe von '$id' ist leer" }
-
-            // In JHF-Koordinaten (Y nach unten) ist die Grundlinie die UNTERkante der
-            // Referenzglyphe, also ihr groesstes Y.
             val baseline = referencePoints.maxOf { it.y }
-            val capHeight = baseline - referencePoints.minOf { it.y }
-            require(capHeight > 0f) { "Versalhoehe von '$id' ist nicht positiv" }
 
             val glyphs = rawGlyphs.mapValues { (_, raw) -> toBaselineOrigin(raw, baseline) }
-
-            val allPoints = glyphs.values.flatMap { g -> g.strokes.flatMap { it.points } }
-            val ascender = allPoints.maxOfOrNull { it.y } ?: capHeight
-            val descender = allPoints.minOfOrNull { it.y } ?: 0f
-
-            // Zeilenhoehe aus typischen Buchstaben statt aus dem Maximum ueber alle Glyphen:
-            // in den Hershey-Saetzen ragen Klammern und geschweifte Zeichen weit ueber jede
-            // Oberlaenge hinaus. Wuerde man danach gehen, stuenden alle Zeilen zu weit
-            // auseinander, obwohl solche Zeichen im Text kaum vorkommen.
-            val typoAscender = extremeY(glyphs, ASCENDER_GLYPHS, max = true) ?: capHeight
-            val typoDescender = extremeY(glyphs, DESCENDER_GLYPHS, max = false) ?: 0f
+            val metrics = FontMetrics.derive(id, glyphs)
 
             return HersheyFont(
                 id = id,
                 displayName = displayName,
-                capHeightUnits = capHeight,
-                ascenderUnits = ascender,
-                descenderUnits = descender,
-                lineHeightUnits = typoAscender - typoDescender,
+                capHeightUnits = metrics.capHeightUnits,
+                ascenderUnits = metrics.ascenderUnits,
+                descenderUnits = metrics.descenderUnits,
+                lineHeightUnits = metrics.lineHeightUnits,
                 glyphs = glyphs,
             )
         }
