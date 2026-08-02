@@ -27,6 +27,16 @@ data class FontMetrics(
         /** Buchstaben mit Unterlaenge - bestimmen die untere Haelfte der Zeilenhoehe. */
         private val DESCENDER_GLYPHS = listOf('g'.code, 'p'.code, 'q'.code, 'y'.code, 'j'.code)
 
+        /**
+         * Der Zeichenvorrat, den der Nutzer im Editor tatsaechlich eintippen kann: ASCII
+         * 32-126, die deutschen Sonderzeichen und die typografischen Gedankenstriche.
+         *
+         * Begrenzt, worueber [ascenderUnits][StrokeFont.ascenderUnits] und
+         * [descenderUnits][StrokeFont.descenderUnits] gemessen werden - Begruendung dort.
+         */
+        private val ERREICHBARE_ZEICHEN: Set<Int> =
+            ((32..126) + "äöüÄÖÜß€".map { it.code } + listOf(0x2013, 0x2014)).toSet()
+
         private fun extremeY(glyphs: Map<Int, Glyph>, codePoints: List<Int>, max: Boolean): Float? {
             val ys = codePoints.mapNotNull { glyphs[it] }
                 .flatMap { g -> g.strokes.flatMap { it.points } }
@@ -45,7 +55,15 @@ data class FontMetrics(
             val capHeight = referencePoints.maxOf { it.y }
             require(capHeight > 0f) { "Versalhoehe von '$id' ist nicht positiv" }
 
-            val allPoints = glyphs.values.flatMap { g -> g.strokes.flatMap { it.points } }
+            // ascenderUnits/descenderUnits nur ueber den erreichbaren Zeichenvorrat messen, nicht
+            // ueber alle Glyphen der Datei: die vier EMS-Schriften liefern je 216 Glyphen,
+            // darunter Latin-Extended-Akzentbuchstaben wie Ŭ, Ć, Å, Ą. Die ragen weit ueber die
+            // Versalhoehe hinaus (z. B. Allure: Oberlaenge 1071,7 zu Versalhoehe 699, Verhaeltnis
+            // 1,53 statt der uebrigen rund 1,3), kommen in deutschen Notizen aber nie vor, weil
+            // der Nutzer sie gar nicht eintippen kann. Wuerden sie mitgezaehlt, hielte
+            // "Einpassen" bei jeder Notiz in diesen Schriften unnoetig viel Kopfabstand frei.
+            val reachablePoints = glyphs.filterKeys { it in ERREICHBARE_ZEICHEN }
+                .values.flatMap { g -> g.strokes.flatMap { it.points } }
 
             // Zeilenhoehe aus typischen Buchstaben statt aus dem Maximum ueber alle Glyphen:
             // Klammern und geschweifte Zeichen ragen weit ueber jede Oberlaenge hinaus. Wuerde
@@ -56,8 +74,8 @@ data class FontMetrics(
 
             return FontMetrics(
                 capHeightUnits = capHeight,
-                ascenderUnits = allPoints.maxOfOrNull { it.y } ?: capHeight,
-                descenderUnits = allPoints.minOfOrNull { it.y } ?: 0f,
+                ascenderUnits = reachablePoints.maxOfOrNull { it.y } ?: capHeight,
+                descenderUnits = reachablePoints.minOfOrNull { it.y } ?: 0f,
                 lineHeightUnits = typoAscender - typoDescender,
             )
         }
