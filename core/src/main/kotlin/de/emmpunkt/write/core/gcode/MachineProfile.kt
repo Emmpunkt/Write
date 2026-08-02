@@ -25,11 +25,16 @@ data class MachineProfile(
     val feedZMmMin: Int = 600,
 
     /**
-     * Verfahrweg ab dem Arbeitsnullpunkt, Vorgabe aus \$130/\$131 des Plotters.
+     * Verfahrweg ab dem MASCHINENnullpunkt, Vorgabe aus \$130/\$131 des Plotters.
      *
-     * Am Geraet sind Soft Limits aktiv (\$20=1): ein Auftrag, der herausragt, loeste dort
-     * einen Alarm aus - moeglicherweise mitten in der Bewegung, mit aufliegendem Stift.
-     * Die Pruefung in checkBounds faengt das ab, bevor sich etwas bewegt.
+     * Nicht ab dem Arbeitsnullpunkt - dieser Irrtum stand hier frueher und hat gekostet:
+     * gesendet wird in G54, und dessen Nullpunkt liegt beim Geraet des Nutzers auf (2, 2).
+     * Vom eingestellten Bereich sind also 2 mm weniger fahrbar, als er verspricht. Deshalb
+     * verlangt checkBounds den Arbeitsnullpunkt als eigenen Parameter.
+     *
+     * Am Geraet sind Soft Limits eingeschaltet (\$20=1), aber darauf ist kein Verlass: ein
+     * Jog weit ueber \$130 hinaus wurde nachgemessen anstandslos ausgefuehrt statt abgewiesen.
+     * Die Pruefung in checkBounds ist damit nicht die zweite Sicherung, sondern die einzige.
      */
     val workAreaXMm: Float = 155f,
     val workAreaYMm: Float = 105f,

@@ -60,25 +60,65 @@ fun List<Polyline>.toMachineCoordinates(profile: MachineProfile): List<Polyline>
     map { it.translate(profile.paperOffsetXMm, profile.paperOffsetYMm) }
 
 /**
- * Prueft, ob der Auftrag vollstaendig im Arbeitsbereich liegt.
+ * Lage des Arbeitsnullpunkts (G54) im Maschinenkoordinatensystem, wie ihn `$#` meldet.
  *
- * Wird VOR dem Senden ausgewertet. Ein Auftrag, der den Bereich verlaesst, wuerde sonst erst
- * beim Anfahren der Grenze bemerkt - dann steht der Stift schon auf dem Papier.
- *
- * Erwartet Zuege bereits in Maschinenkoordinaten (siehe [toMachineCoordinates]).
+ * Die App sendet Koordinaten in G54. Die Firmware addiert diesen Versatz, bevor sie faehrt -
+ * der Verfahrweg aus \$130/\$131 gilt aber ab dem MASCHINENnullpunkt. Beides deckt sich nur,
+ * wenn der Versatz null ist; sonst ist genau um ihn weniger fahrbar, als der Arbeitsbereich
+ * verspricht.
  */
-fun checkBounds(machineStrokes: List<Polyline>, profile: MachineProfile): BoundsCheck {
+data class WorkOffset(val xMm: Float, val yMm: Float)
+
+/**
+ * Prueft, ob der Auftrag vollstaendig im Verfahrweg der Maschine liegt.
+ *
+ * Wird VOR dem Senden ausgewertet, und das ist keine Vorsichtsmassnahme, sondern die einzige:
+ * am Geraet nachgemessen hat die Firmware einen Jog weit ueber \$130 hinaus anstandslos
+ * ausgefuehrt, statt ihn abzuweisen. Was hier durchrutscht, faehrt in den Anschlag.
+ *
+ * Erwartet Zuege bereits in Blatt-plus-Papierversatz-Koordinaten, also in G54
+ * (siehe [toMachineCoordinates]).
+ *
+ * @param workOffset Lage des Arbeitsnullpunkts. `null` heisst *unbekannt* und ist bewusst ein
+ *   Fehler, kein stillschweigendes (0,0): genau diese Annahme liess den Auftrag bis zu zwei
+ *   Millimeter ueber den Verfahrweg hinauslaufen.
+ */
+fun checkBounds(
+    machineStrokes: List<Polyline>,
+    profile: MachineProfile,
+    workOffset: WorkOffset?,
+): BoundsCheck {
     val bounds = machineStrokes.boundingBox()
         ?: return BoundsCheck(null, emptyList())
 
+    if (workOffset == null) {
+        return BoundsCheck(
+            bounds,
+            listOf(
+                "Arbeitsnullpunkt unbekannt - ohne ihn laesst sich nicht sagen, ob der Text " +
+                    "in den Verfahrweg passt. Bitte neu verbinden oder referenzieren.",
+            ),
+        )
+    }
+
+    // Die Grenzen, umgerechnet in die Koordinaten, die tatsaechlich gesendet werden.
+    val linksMin = -workOffset.xMm
+    val untenMin = -workOffset.yMm
+    val rechtsMax = profile.workAreaXMm - workOffset.xMm
+    val obenMax = profile.workAreaYMm - workOffset.yMm
+
     val violations = buildList {
-        if (bounds.minX < 0f) add("Text ragt %.1f mm links aus dem Arbeitsbereich".fmt(-bounds.minX))
-        if (bounds.minY < 0f) add("Text ragt %.1f mm unten aus dem Arbeitsbereich".fmt(-bounds.minY))
-        if (bounds.maxX > profile.workAreaXMm) {
-            add("Text ragt %.1f mm rechts aus dem Arbeitsbereich".fmt(bounds.maxX - profile.workAreaXMm))
+        if (bounds.minX < linksMin) {
+            add("Text ragt %.1f mm links aus dem Arbeitsbereich".fmt(linksMin - bounds.minX))
         }
-        if (bounds.maxY > profile.workAreaYMm) {
-            add("Text ragt %.1f mm oben aus dem Arbeitsbereich".fmt(bounds.maxY - profile.workAreaYMm))
+        if (bounds.minY < untenMin) {
+            add("Text ragt %.1f mm unten aus dem Arbeitsbereich".fmt(untenMin - bounds.minY))
+        }
+        if (bounds.maxX > rechtsMax) {
+            add("Text ragt %.1f mm rechts aus dem Arbeitsbereich".fmt(bounds.maxX - rechtsMax))
+        }
+        if (bounds.maxY > obenMax) {
+            add("Text ragt %.1f mm oben aus dem Arbeitsbereich".fmt(bounds.maxY - obenMax))
         }
     }
     return BoundsCheck(bounds, violations)

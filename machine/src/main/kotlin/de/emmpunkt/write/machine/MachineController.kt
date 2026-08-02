@@ -2,6 +2,7 @@ package de.emmpunkt.write.machine
 
 import de.emmpunkt.write.core.gcode.MachineProfile
 import de.emmpunkt.write.core.gcode.PlotJob
+import de.emmpunkt.write.core.gcode.WorkOffset
 import de.emmpunkt.write.core.gcode.checkBounds
 import de.emmpunkt.write.core.geometry.Polyline
 import kotlinx.coroutines.Dispatchers
@@ -262,10 +263,15 @@ class MachineController(
         }
 
         // Die eigentliche Grenzpruefung: lieber hier scheitern als an der Endlage.
+        //
+        // Der Arbeitsnullpunkt muss mit hinein. Die Firmware rechnet ihn auf jede gesendete
+        // Koordinate auf, der Verfahrweg gilt aber ab dem Maschinennullpunkt - ohne ihn haelt
+        // die Pruefung genau diese Millimeter faelschlich fuer fahrbar. Am Geraet des Nutzers
+        // sind das 2 mm in X und Y.
         val machineStrokes = blattStrokes.map {
             it.translate(profile.paperOffsetXMm, profile.paperOffsetYMm)
         }
-        addAll(checkBounds(machineStrokes, profile).violations)
+        addAll(checkBounds(machineStrokes, profile, arbeitsnullpunkt()).violations)
     }
 
     /**
@@ -348,6 +354,17 @@ class MachineController(
     suspend fun refreshWorkOffset(): Result<Position?> = withContext(Dispatchers.IO) {
         runCatching { transportLock.withLock { fetchWorkOffset() } }
     }
+
+    /**
+     * Der zuletzt geholte Arbeitsnullpunkt fuer die Grenzpruefung, oder `null`, wenn er
+     * unbekannt ist.
+     *
+     * `null` fuehrt bewusst dazu, dass nicht gesendet werden darf. Ein angenommener Nullpunkt
+     * waere schlimmer als gar keiner: er sieht richtig aus und laesst den Auftrag trotzdem in
+     * den Anschlag fahren.
+     */
+    private fun arbeitsnullpunkt(): WorkOffset? =
+        statusParser.workCoordinateOffset?.let { WorkOffset(it.x, it.y) }
 
     private fun fetchWorkOffset(): Position? {
         transport.writeLine("\$#")
