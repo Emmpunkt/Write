@@ -17,8 +17,16 @@ import de.emmpunkt.write.core.geometry.Polyline
  *  3. [SUBSTITUTIONS] - typografische Zeichen auf ihre ASCII-Entsprechung abgebildet.
  *     Android-Tastaturen setzen Gedankenstriche und geschwungene Anfuehrungszeichen
  *     automatisch ein; ohne diese Abbildung entstuenden Luecken im geplotteten Text.
+ *
+ * @param stricheErsetzen ob die waagerechten Striche der Basisschrift durch eigene ersetzt
+ *   werden. Fuer die Hershey-Schriften noetig - ihr Bindestrich ist mit 0,86 Versalhoehen
+ *   breiter als jeder Kleinbuchstabe und sitzt auf dessen Oberkante. Die SVG-Schriften bringen
+ *   brauchbare eigene Striche mit; dort waere die Ersetzung eine Verschlechterung.
  */
-class GlyphOverlayFont(private val base: StrokeFont) : StrokeFont {
+class GlyphOverlayFont(
+    private val base: StrokeFont,
+    private val stricheErsetzen: Boolean = true,
+) : StrokeFont {
 
     override val id: String get() = base.id
     override val displayName: String get() = base.displayName
@@ -46,7 +54,7 @@ class GlyphOverlayFont(private val base: StrokeFont) : StrokeFont {
 
     private fun build(codePoint: Int): Glyph? {
         // Vor der Basisschrift: deren Striche sind fuer Fliesstext zu lang und sitzen zu hoch.
-        STRICHE[codePoint]?.let { return drawDash(it) }
+        if (stricheErsetzen) STRICHE[codePoint]?.let { return drawDash(it) }
 
         base.glyph(codePoint)?.let { return it }
 
@@ -60,7 +68,8 @@ class GlyphOverlayFont(private val base: StrokeFont) : StrokeFont {
         }
 
         SUBSTITUTIONS[codePoint]?.let { replacement ->
-            return STRICHE[replacement]?.let { drawDash(it) } ?: base.glyph(replacement)
+            return (if (stricheErsetzen) STRICHE[replacement]?.let { drawDash(it) } else null)
+                ?: base.glyph(replacement)
         }
 
         return null
