@@ -338,9 +338,9 @@ class GCodeGeneratorTest {
  * Koordinate auf; der Verfahrweg aus $130/$131 gilt aber ab dem MASCHINENnullpunkt. Wer den
  * Versatz uebersieht, haelt genau diese Millimeter faelschlich fuer fahrbar.
  *
- * Der Fehler ist nicht harmlos: am Geraet nachgemessen hat die Firmware einen Jog weit ueber
- * $130 hinaus anstandslos ausgefuehrt, statt ihn mit error:15 abzuweisen. Die Pruefung in der
- * App ist also nicht die zweite Verteidigungslinie, sondern die einzige.
+ * Der Fehler ist nicht harmlos: die Soft Limits der Firmware greifen erst waehrend des
+ * Auftrags und loesen dann ALARM:2 aus - mitten in der Bewegung, mit halb geschriebenem
+ * Blatt. Genau das ist am Geraet passiert.
  */
 class ArbeitsnullpunktTest {
 

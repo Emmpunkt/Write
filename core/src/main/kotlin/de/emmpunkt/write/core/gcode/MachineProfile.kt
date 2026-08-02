@@ -32,9 +32,14 @@ data class MachineProfile(
      * Vom eingestellten Bereich sind also 2 mm weniger fahrbar, als er verspricht. Deshalb
      * verlangt checkBounds den Arbeitsnullpunkt als eigenen Parameter.
      *
-     * Am Geraet sind Soft Limits eingeschaltet (\$20=1), aber darauf ist kein Verlass: ein
-     * Jog weit ueber \$130 hinaus wurde nachgemessen anstandslos ausgefuehrt statt abgewiesen.
-     * Die Pruefung in checkBounds ist damit nicht die zweite Sicherung, sondern die einzige.
+     * Am Geraet sind Soft Limits eingeschaltet, aber sie retten den Auftrag nicht: eine
+     * Zielkoordinate ausserhalb loest ALARM:2 aus - mitten in der Bewegung, mit halb
+     * geschriebenem Blatt. Die Pruefung in checkBounds soll genau davor liegen.
+     *
+     * ACHTUNG, hier noch nicht abgebildet: der fahrbare Bereich beginnt nicht bei 0. Beim
+     * Geraet des Nutzers steht in der Achsenkonfiguration `mpos_mm: 3.0` bei negativer
+     * Referenzfahrt - fahrbar ist also Maschine 3..158, nicht 0..155. Nachgemessen: ein Jog
+     * auf Maschine 2 wird auf 3 begrenzt.
      */
     val workAreaXMm: Float = 155f,
     val workAreaYMm: Float = 105f,

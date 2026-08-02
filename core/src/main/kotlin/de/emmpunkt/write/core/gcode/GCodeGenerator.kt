@@ -72,9 +72,10 @@ data class WorkOffset(val xMm: Float, val yMm: Float)
 /**
  * Prueft, ob der Auftrag vollstaendig im Verfahrweg der Maschine liegt.
  *
- * Wird VOR dem Senden ausgewertet, und das ist keine Vorsichtsmassnahme, sondern die einzige:
- * am Geraet nachgemessen hat die Firmware einen Jog weit ueber \$130 hinaus anstandslos
- * ausgefuehrt, statt ihn abzuweisen. Was hier durchrutscht, faehrt in den Anschlag.
+ * Wird VOR dem Senden ausgewertet. Die Firmware hat zwar eigene Soft Limits, aber sie greifen
+ * erst waehrend des Auftrags: eine Zielkoordinate ausserhalb loest ALARM:2 aus - mitten in der
+ * Bewegung, mit aufliegendem Stift und halb geschriebenem Blatt. Am Geraet nachgemessen.
+ * (Jog-Befehle verhalten sich anders: die werden auf die Grenze begrenzt statt abgewiesen.)
  *
  * Erwartet Zuege bereits in Blatt-plus-Papierversatz-Koordinaten, also in G54
  * (siehe [toMachineCoordinates]).

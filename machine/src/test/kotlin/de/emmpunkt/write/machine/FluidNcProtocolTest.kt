@@ -209,8 +209,8 @@ class PreflightTest {
     fun `Arbeitsnullpunkt verkuerzt den fahrbaren Weg`() = kotlinx.coroutines.test.runTest {
         // Der Fall vom Geraet des Nutzers: G54 liegt auf (2, 2). Ein Text bis X = 154 liegt
         // unter dem eingestellten Arbeitsbereich von 155 - die Maschine muesste dafuer aber
-        // auf 156 fahren und liefe in den Anschlag. Nachgemessen weist die Firmware das NICHT
-        // ab, diese Pruefung ist also die einzige.
+        // auf 156 fahren. Die Firmware quittiert das nicht vorab, sondern bricht mitten im
+        // Auftrag mit ALARM:2 ab - dann ist das Blatt halb beschrieben.
         FakeFluidNc(wco = Triple(2f, 2f, 0f)).use { fake ->
             val c = controller(fake)
             c.connect().getOrThrow()
