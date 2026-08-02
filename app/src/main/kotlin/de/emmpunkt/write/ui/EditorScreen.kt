@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -63,6 +64,9 @@ fun EditorScreen(
     machine: MachineUiState,
     onTextChange: (String) -> Unit,
     onSettingsChange: ((AppSettings) -> AppSettings) -> Unit,
+    onSettingsChangeLive: ((AppSettings) -> AppSettings) -> Unit,
+    onSettingsCommit: () -> Unit,
+    onAutoFit: () -> Unit,
     onPlot: () -> Unit,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
@@ -90,7 +94,14 @@ fun EditorScreen(
 
         Hinweise(document, settings)
 
-        StilLeiste(settings, onSettingsChange)
+        StilLeiste(
+            settings = settings,
+            textLeer = text.isBlank(),
+            onChange = onSettingsChange,
+            onChangeLive = onSettingsChangeLive,
+            onCommit = onSettingsCommit,
+            onAutoFit = onAutoFit,
+        )
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -173,8 +184,15 @@ private fun Warnung(text: String) {
 @Composable
 private fun StilLeiste(
     settings: AppSettings,
+    textLeer: Boolean,
     onChange: ((AppSettings) -> AppSettings) -> Unit,
+    onChangeLive: ((AppSettings) -> AppSettings) -> Unit,
+    onCommit: () -> Unit,
+    onAutoFit: () -> Unit,
 ) {
+    // Reiner Bildschirmzustand: welche Regler zuletzt offen standen, muss nichts ueberdauern.
+    var feintuningOffen by remember { mutableStateOf(false) }
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -208,11 +226,13 @@ private fun StilLeiste(
             Text("Größe", style = MaterialTheme.typography.bodyMedium)
             Slider(
                 value = settings.sizeMm,
-                onValueChange = { v -> onChange { it.copy(sizeMm = (v * 10).roundToInt() / 10f) } },
+                onValueChange = { v -> onChangeLive { it.copy(sizeMm = auf(v, 0.1f)) } },
+                onValueChangeFinished = onCommit,
                 valueRange = 3f..25f,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
             )
             Text("${settings.sizeMm.fmt()} mm", style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = onAutoFit, enabled = !textLeer) { Text("Einpassen") }
         }
 
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
@@ -231,8 +251,120 @@ private fun StilLeiste(
                 }
             }
         }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = { feintuningOffen = !feintuningOffen }) {
+                Text(if (feintuningOffen) "Schriftbild ausblenden" else "Schriftbild…")
+            }
+            if (feintuningOffen) {
+                TextButton(
+                    onClick = {
+                        val v = AppSettings()
+                        onChange {
+                            it.copy(
+                                letterSpacing = v.letterSpacing,
+                                wordSpacing = v.wordSpacing,
+                                lineSpacing = v.lineSpacing,
+                                slantDeg = v.slantDeg,
+                            )
+                        }
+                    },
+                ) {
+                    Text("Zurücksetzen")
+                }
+            }
+        }
+
+        if (feintuningOffen) {
+            StilRegler(
+                label = "Laufweite",
+                wert = settings.letterSpacing,
+                bereich = -0.2f..0.5f,
+                schritt = 0.01f,
+                anzeige = { "%+d %%".format(Locale.GERMANY, (it * 100).roundToInt()) },
+                onChangeLive = { v -> onChangeLive { s -> s.copy(letterSpacing = v) } },
+                onCommit = onCommit,
+            )
+            StilRegler(
+                label = "Wortabstand",
+                wert = settings.wordSpacing,
+                bereich = -0.6f..1.0f,
+                schritt = 0.01f,
+                anzeige = { "%+d %%".format(Locale.GERMANY, (it * 100).roundToInt()) },
+                onChangeLive = { v -> onChangeLive { s -> s.copy(wordSpacing = v) } },
+                onCommit = onCommit,
+            )
+            StilRegler(
+                label = "Zeilenabstand",
+                wert = settings.lineSpacing,
+                bereich = 0.8f..2.0f,
+                schritt = 0.05f,
+                anzeige = { String.format(Locale.GERMANY, "%.2f", it) },
+                onChangeLive = { v -> onChangeLive { s -> s.copy(lineSpacing = v) } },
+                onCommit = onCommit,
+            )
+            StilRegler(
+                label = "Neigung",
+                wert = settings.slantDeg,
+                bereich = -20f..20f,
+                schritt = 1f,
+                anzeige = { "%+d°".format(Locale.GERMANY, it.roundToInt()) },
+                onChangeLive = { v -> onChangeLive { s -> s.copy(slantDeg = v) } },
+                onCommit = onCommit,
+            )
+        }
     }
 }
+
+/**
+ * Ein beschrifteter Regler mit Wertanzeige.
+ *
+ * Der Wert wandert waehrend des Zugs nur durch [onChangeLive]; gespeichert wird erst in
+ * [onCommit] beim Loslassen.
+ */
+@Composable
+private fun StilRegler(
+    label: String,
+    wert: Float,
+    bereich: ClosedFloatingPointRange<Float>,
+    schritt: Float,
+    anzeige: (Float) -> String,
+    onChangeLive: (Float) -> Unit,
+    onCommit: () -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.width(104.dp),
+        )
+        Slider(
+            value = wert,
+            onValueChange = { v -> onChangeLive(auf(v, schritt)) },
+            onValueChangeFinished = onCommit,
+            valueRange = bereich,
+            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+        )
+        Text(
+            anzeige(wert),
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.width(56.dp),
+        )
+    }
+}
+
+/**
+ * Rundet auf ein Vielfaches von [schritt].
+ *
+ * Ohne das lieferte der Regler beliebige Zwischenwerte - die Anzeige zappelte, und
+ * „Einpassen" naennte eine Groesse, die sich von Hand nicht wieder treffen laesst.
+ */
+private fun auf(wert: Float, schritt: Float): Float =
+    ((wert / schritt).roundToInt() * schritt.toDouble()).toFloat()
 
 @Composable
 private fun SendeBereich(
