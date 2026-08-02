@@ -10,7 +10,7 @@ damit vollständig auf dem PC testbar – ohne Gerät, ohne Emulator, ohne Plott
 
 | Modul | Inhalt |
 |---|---|
-| `core` | Schriften (JHF-Parser, Umlaut-Komposition), Textsatz, Geometrie, G-Code |
+| `core` | Schriften (JHF- und SVG-Parser, Umlaut-Komposition), Textsatz, Geometrie, G-Code |
 | `machine` | FluidNC-Protokoll, Telnet-Transport, Streaming, Sicherheitsprüfungen |
 | `app` | Compose-Oberfläche: Editor mit Vorschau, Maschine, Einstellungen |
 
@@ -222,9 +222,6 @@ adb -s <handy-ip>:5555 install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 Noch offen:
-- **Es wurde noch nie tatsächlich geplottet.** `Z oben`/`Z unten` und der Papier-Versatz
-  sind ungemessene Annahmen (3 / −1.5 mm). Vor dem ersten Blatt einmessen, und den ersten
-  Durchlauf mit `Z unten = Z oben` trocken fahren.
 - Die Z-Achse hat keinen Endschalter und wird nicht referenziert. Ihr Nullpunkt entsteht nur
   über „Z hier nullen" und ist nach einem Neustart der Steuerung erneut zu setzen.
 - **Die neuen SVG-Schriften wurden noch nicht am Gerät bedient und noch nicht an der Maschine
