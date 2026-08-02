@@ -70,13 +70,27 @@ Auto-Fit (`fitSize` im core) und die vier Feintuning-Regler im Editor. Reglerwer
 während des Zugs nur in den Zustand, gespeichert wird beim Loslassen (`updateSettingsLive` /
 `commitSettings` im ViewModel).
 
-## Etappe 2b – „Schön" (als Nächstes)
+## Etappe 2b abgeschlossen (2026-08-02)
 
-1. **SVG-Script-Fonts** (EMS Allure, EMS Casual Script, SIL OFL). Hershey-Script verbindet die
-   Buchstaben nur teilweise; die EMS-Schriften sind echte verbundene Kursiven. Erfordert einen
-   zweiten Font-Parser hinter der bestehenden `StrokeFont`-Schnittstelle – der Rest der App
-   merkt davon nichts.
-2. **Dekor**: Rahmen, Trennlinien, Unterstreichungen, Aufzählungspunkte.
+Vier einlinige SVG-Schreibschriften (EMS Allure, Decorous Script, Invite, Delight; SIL OFL)
+über einen zweiten Parser `SvgFont` hinter derselben `StrokeFont`-Schnittstelle. Die
+Hershey-Kalligrafie ist entfernt.
+
+**Anlass war eine Messung, kein Wunsch:** Am ersten Probeblatt mit 25 mm Versalhöhe fiel auf,
+dass Buchstaben nicht aneinander anschließen. Die Untersuchung ergab: Von den 676
+Kleinbuchstabenpaaren der Hershey-Schreibschrift verbinden 85 % exakt, der Rest nicht – `t`
+endet oben am Querstrich, Großbuchstaben und Ziffern haben gar keinen Anschlusspunkt. Im
+G-Code selbst gibt es dabei **keine** Sprünge zwischen zeichnenden Segmenten; die App hebt
+sauber ab. Der Effekt skaliert mit der Größe und ist bei 7 mm mit 0,28 mm unsichtbar.
+
+Zwei Dinge, die bei Arbeit an den Schriften Zeit sparen:
+
+- **`cap-height` in den SVG-Dateien ist unbrauchbar** (überall 500, real 639–939). Metriken
+  kommen aus `FontMetrics.derive` und damit aus den Glyphen.
+- **Ob Buchstaben „verbinden", lässt sich nicht einfach messen.** Ein Versuch, den letzten
+  Punkt eines Pfades als Auslaufstrich zu nehmen, lieferte für EMS Allure 30 % statt der im
+  Bild sichtbaren durchgehenden Verbindung – die Strichrichtung folgt in diesen Schriften
+  nicht der Schreibrichtung. Beurteilt wird über die Musterbilder.
 
 ## Etappe 3 – „Bequem"
 
