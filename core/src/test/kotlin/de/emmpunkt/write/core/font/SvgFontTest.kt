@@ -31,6 +31,23 @@ class SvgFontTest {
 
     private fun mini() = SvgFont.parse("mini", "Mini", miniFont)
 
+    /**
+     * Das 'H' hat bewusst KEIN eigenes horiz-adv-x. Nach SVG 1.1 muss es dann den Wert vom
+     * umschliessenden <font>-Element erben (hier 333) - deckt genau die Vererbungsregel ab,
+     * die miniFont nicht prueft, weil dort jede Glyphe ihren eigenen Vorschub traegt.
+     */
+    private val erbschaftFont = """
+        <?xml version="1.0" encoding="UTF-8" ?>
+        <svg xmlns="http://www.w3.org/2000/svg" version="1.1">
+        <defs>
+        <font id="Erbschaft" horiz-adv-x="333" >
+        <font-face units-per-em="1000" ascent="800" descent="-200" cap-height="500" />
+        <glyph unicode="H" glyph-name="H" d="M 100 0 L 100 700 M 500 0 L 500 700 M 100 350 L 500 350" />
+        </font>
+        </defs>
+        </svg>
+    """.trimIndent()
+
     @Test
     fun `liest Vorschub und Punkte einer Glyphe`() {
         val glyph = assertNotNull(mini().glyph('H'.code))
@@ -84,6 +101,12 @@ class SvgFontTest {
         val space = assertNotNull(mini().glyph(' '.code))
         assertTrue(space.strokes.isEmpty())
         assertEquals(200f, space.advance)
+    }
+
+    @Test
+    fun `Glyphe ohne eigenes horiz-adv-x erbt den Vorschub vom umschliessenden font-Element`() {
+        val glyph = assertNotNull(SvgFont.parse("erbschaft", "Erbschaft", erbschaftFont).glyph('H'.code))
+        assertEquals(333f, glyph.advance)
     }
 
     @Test

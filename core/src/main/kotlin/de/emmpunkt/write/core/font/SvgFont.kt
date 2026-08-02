@@ -26,6 +26,7 @@ object SvgFont {
      *  76 Kurven je Datei nicht. */
     private const val BEZIER_STUECKE = 8
 
+    private val FONT = Regex("""<font\s+([^>]*)>""")
     private val GLYPH = Regex("""<glyph\s+([^>]*?)/?>""", RegexOption.DOT_MATCHES_ALL)
     private val UNICODE_ATTR = Regex("""unicode="([^"]*)"""")
     private val ADVANCE_ATTR = Regex("""horiz-adv-x="(-?[\d.]+)"""")
@@ -37,6 +38,12 @@ object SvgFont {
     fun parse(id: String, displayName: String, content: String): StrokeFont {
         val glyphs = LinkedHashMap<Int, Glyph>()
 
+        // SVG 1.1 erklaert horiz-adv-x am <font>-Element zum Vorgabewert fuer alle Glyphen ohne
+        // eigene Angabe. Ohne diese Vererbung wuerde so eine Glyphe mit 0f Vorschub geschrieben -
+        // der Stift bliebe auf der Stelle und der naechste Buchstabe laege genau darauf.
+        val fontAdvance = FONT.find(content)?.groupValues?.get(1)
+            ?.let { ADVANCE_ATTR.find(it)?.groupValues?.get(1)?.toFloatOrNull() } ?: 0f
+
         GLYPH.findAll(content).forEach { treffer ->
             val attribute = treffer.groupValues[1]
             val roh = UNICODE_ATTR.find(attribute)?.groupValues?.get(1) ?: return@forEach
@@ -45,7 +52,7 @@ object SvgFont {
             // zeichenweise und koennte sie gar nicht ansprechen.
             if (zeichen.codePointCount(0, zeichen.length) != 1) return@forEach
 
-            val advance = ADVANCE_ATTR.find(attribute)?.groupValues?.get(1)?.toFloatOrNull() ?: 0f
+            val advance = ADVANCE_ATTR.find(attribute)?.groupValues?.get(1)?.toFloatOrNull() ?: fontAdvance
             val pfad = PATH_ATTR.find(attribute)?.groupValues?.get(1)
             glyphs[zeichen.codePointAt(0)] = Glyph(
                 strokes = if (pfad.isNullOrBlank()) emptyList() else zuege(pfad),
