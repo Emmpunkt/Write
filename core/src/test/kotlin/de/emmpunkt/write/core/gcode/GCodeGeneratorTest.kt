@@ -17,6 +17,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
+/** Maschinennullpunkt und Arbeitsnullpunkt fallen zusammen - der einfachste Fall. */
+private val OHNE_VERSATZ = WorkOffset(0f, 0f)
+
 class GCodeGeneratorTest {
 
     private val profile = MachineProfile(
@@ -127,17 +130,17 @@ class GCodeGeneratorTest {
     fun `Grenzpruefung erkennt Ueberschreitungen in alle Richtungen`() {
         val klein = profile.copy(workAreaXMm = 50f, workAreaYMm = 50f)
 
-        assertTrue(checkBounds(listOf(Polyline(listOf(Point(0f, 0f), Point(40f, 40f)))), klein).ok)
+        assertTrue(checkBounds(listOf(Polyline(listOf(Point(0f, 0f), Point(40f, 40f)))), klein, OHNE_VERSATZ).ok)
 
-        val rechts = checkBounds(listOf(Polyline(listOf(Point(0f, 0f), Point(60f, 10f)))), klein)
+        val rechts = checkBounds(listOf(Polyline(listOf(Point(0f, 0f), Point(60f, 10f)))), klein, OHNE_VERSATZ)
         assertFalse(rechts.ok)
         assertTrue(rechts.violations.single().contains("rechts"))
 
-        val links = checkBounds(listOf(Polyline(listOf(Point(-5f, 0f), Point(10f, 10f)))), klein)
+        val links = checkBounds(listOf(Polyline(listOf(Point(-5f, 0f), Point(10f, 10f)))), klein, OHNE_VERSATZ)
         assertFalse(links.ok)
         assertTrue(links.violations.single().contains("links"))
 
-        val oben = checkBounds(listOf(Polyline(listOf(Point(0f, 0f), Point(10f, 70f)))), klein)
+        val oben = checkBounds(listOf(Polyline(listOf(Point(0f, 0f), Point(10f, 70f)))), klein, OHNE_VERSATZ)
         assertFalse(oben.ok)
         assertTrue(oben.violations.single().contains("oben"))
     }
@@ -145,7 +148,7 @@ class GCodeGeneratorTest {
     @Test
     fun `Grenzpruefung meldet den Betrag der Ueberschreitung`() {
         val klein = profile.copy(workAreaXMm = 50f, workAreaYMm = 50f)
-        val check = checkBounds(listOf(Polyline(listOf(Point(0f, 0f), Point(57.5f, 10f)))), klein)
+        val check = checkBounds(listOf(Polyline(listOf(Point(0f, 0f), Point(57.5f, 10f)))), klein, OHNE_VERSATZ)
         assertTrue(check.violations.single().contains("7.5"), "Betrag fehlt: ${check.violations}")
     }
 
@@ -326,5 +329,90 @@ class GCodeGeneratorTest {
 
         assertFalse(obenRechts, "Oben rechts duerfte beim 'L' nichts liegen - Bild gespiegelt?")
         assertTrue(untenRechts, "Der Fuss des 'L' fehlt unten rechts - Bild gespiegelt?")
+    }
+}
+
+/**
+ * Der Arbeitsnullpunkt (G54) liegt in aller Regel NICHT auf dem Maschinennullpunkt - beim
+ * Plotter des Nutzers gemessen auf (2, 2). Die Firmware rechnet ihn auf jede gesendete
+ * Koordinate auf; der Verfahrweg aus $130/$131 gilt aber ab dem MASCHINENnullpunkt. Wer den
+ * Versatz uebersieht, haelt genau diese Millimeter faelschlich fuer fahrbar.
+ *
+ * Der Fehler ist nicht harmlos: die Soft Limits der Firmware greifen erst waehrend des
+ * Auftrags und loesen dann ALARM:2 aus - mitten in der Bewegung, mit halb geschriebenem
+ * Blatt. Genau das ist am Geraet passiert.
+ */
+class ArbeitsnullpunktTest {
+
+    private val tisch = MachineProfile(workAreaXMm = 50f, workAreaYMm = 50f)
+    private fun zug(x: Float, y: Float) = listOf(Polyline(listOf(Point(0f, 0f), Point(x, y))))
+
+    @Test
+    fun `Verfahrweg verkuerzt sich um den Arbeitsnullpunkt`() {
+        // X = 49 liegt unter dem Verfahrweg 50 - aber der Arbeitsnullpunkt sitzt auf 2,
+        // die Maschine muesste also auf 51 fahren.
+        val check = checkBounds(zug(49f, 10f), tisch, WorkOffset(2f, 2f))
+
+        assertFalse(check.ok, "Ueberschreitung um 1 mm wurde nicht erkannt")
+        assertTrue(check.violations.single().contains("rechts"), check.violations.toString())
+        assertTrue(check.violations.single().contains("1.0"), "Betrag falsch: ${check.violations}")
+    }
+
+    @Test
+    fun `dieselbe Grenze in Y`() {
+        val check = checkBounds(zug(10f, 49f), tisch, WorkOffset(2f, 2f))
+        assertFalse(check.ok)
+        assertTrue(check.violations.single().contains("oben"), check.violations.toString())
+    }
+
+    @Test
+    fun `ohne Versatz bleibt der volle Verfahrweg nutzbar`() {
+        // Gegenprobe: die Korrektur darf den Bereich nicht pauschal beschneiden.
+        assertTrue(checkBounds(zug(49f, 49f), tisch, WorkOffset(0f, 0f)).ok)
+    }
+
+    @Test
+    fun `negativer Bereich ist erreichbar soweit der Arbeitsnullpunkt Platz laesst`() {
+        // Arbeitsnullpunkt auf 2: X = -1 ist Maschinenkoordinate 1 und damit fahrbar,
+        // X = -3 waere Maschinenkoordinate -1 und stiesse an den Anschlag.
+        assertTrue(checkBounds(zug(-1f, 10f), tisch, WorkOffset(2f, 2f)).ok)
+
+        val zuWeit = checkBounds(zug(-3f, 10f), tisch, WorkOffset(2f, 2f))
+        assertFalse(zuWeit.ok)
+        assertTrue(zuWeit.violations.single().contains("links"), zuWeit.violations.toString())
+    }
+
+    @Test
+    fun `unbekannter Arbeitsnullpunkt gilt nicht als null`() {
+        // Genau diese stille Annahme war der Fehler. Ohne bekannten Versatz laesst sich
+        // nicht sagen, wo die Grenze liegt - dann darf nicht gefahren werden.
+        val check = checkBounds(zug(10f, 10f), tisch, null)
+
+        assertFalse(check.ok, "Unbekannter Versatz wurde stillschweigend als 0 angenommen")
+        assertTrue(
+            check.violations.single().contains("Arbeitsnullpunkt"),
+            "Meldung nennt die Ursache nicht: ${check.violations}",
+        )
+    }
+
+    @Test
+    fun `der gemeldete Fall des Nutzers liegt genau im kritischen Streifen`() {
+        // Nachgestellt aus den am Geraet ausgelesenen Werten: Tisch 155 x 105,
+        // Arbeitsnullpunkt (2, 2), Blattversatz (5, 5). Die oberste Tinte des Textes
+        // "Gruesse von der Maschine" lag bei Blatt-Y 97.41, mit Blattversatz also bei
+        // G54-Y 102.41 - nur 0.59 mm unter der wahren Grenze von 103.
+        val echt = MachineProfile(workAreaXMm = 155f, workAreaYMm = 105f)
+        val nullpunkt = WorkOffset(2f, 2f)
+
+        assertTrue(
+            checkBounds(zug(149.27f, 102.41f), echt, nullpunkt).ok,
+            "Der zuletzt gesendete Auftrag war noch fahrbar - knapp",
+        )
+
+        // Zwei Millimeter mehr Text nach oben, und die Maschine faehrt in den Anschlag.
+        // Die alte Pruefung gegen 105 haette bis 105 alles durchgelassen.
+        val darueber = checkBounds(zug(149.27f, 104f), echt, nullpunkt)
+        assertFalse(darueber.ok, "G54-Y 104 waere Maschine 106 - jenseits des Verfahrwegs")
+        assertTrue(darueber.violations.single().contains("oben"), darueber.violations.toString())
     }
 }

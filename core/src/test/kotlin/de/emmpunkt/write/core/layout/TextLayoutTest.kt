@@ -240,3 +240,136 @@ class WorttrennungTest {
         assertEquals(text.replace(" ", ""), zusammen.replace(" ", ""))
     }
 }
+
+/**
+ * Die SVG-Schreibschriften haben negative x-Werte in ihren Glyphen: Einlaufstriche, mit denen
+ * Schreibschrift an den vorherigen Buchstaben anschliesst. Steht so ein Zeichen am Zeilenanfang,
+ * gibt es keinen Vorgaenger zum Anschliessen - der Strich ragt stattdessen ueber den linken Rand
+ * hinaus. Hershey-Schriften hatten dieses Problem nie (Glyphen beginnen bei x >= 0), darum ist es
+ * erst mit den vier EMS-Schreibschriften aufgefallen.
+ */
+class EinlaufKorrekturTest {
+
+    private val schrift = Fonts.load("allure")
+
+    @Test
+    fun `Einlaufstrich von j ragt ohne Korrektur ueber den linken Rand hinaus`() {
+        // 15 mm Versalhoehe, gemessen ragt der Einlaufstrich von 'j' in Allure dabei rund 8 mm
+        // ueber den Ursprung der Glyphe hinaus - deutlich mehr als der 10 mm Rand hier aufnehmen
+        // wuerde, waere die Zeile nicht korrigiert.
+        val rahmen = Frame(widthMm = 105f, heightMm = 148f, margins = Margins.all(10f))
+        val stil = TextStyle(fontId = "allure", sizeMm = 15f)
+
+        val ergebnis = layoutText("jubel", stil, rahmen, schrift)
+        val minX = ergebnis.strokes.flatMap { it.points }.minOf { it.x }
+
+        assertTrue(
+            minX >= rahmen.margins.left - 0.01f,
+            "Einlaufstrich ragt ueber den linken Rand: minX=$minX mm, Rand=${rahmen.margins.left} mm",
+        )
+    }
+
+    @Test
+    fun `Korrektur verschiebt die ganze Zeile gleichmaessig statt einzelne Buchstaben`() {
+        // Zentriert statt linksbuendig, damit sich ein Fall OHNE Korrekturbedarf herstellen
+        // laesst: bei Linksbuendig liegt der Ursprung der ersten Glyphe immer exakt auf
+        // margins.left, ein negativer Einlaufstrich unterschreitet den Rand also unabhaengig
+        // von dessen Groesse - "grosser Rand" allein schafft dort nie einen unkorrigierten Fall.
+        // Zentriert dagegen wirkt der Abstand zur Blattmitte wie ein zusaetzlicher Puffer: in
+        // einem sehr breiten Rahmen ist dieser Puffer groesser als der Ueberhang, die Korrektur
+        // greift nicht - das liefert die unverschobene Referenzposition jedes Buchstabens.
+        val stil = TextStyle(fontId = "allure", sizeMm = 15f, align = Align.CENTER)
+
+        val breiterRahmen = Frame(widthMm = 300f, heightMm = 150f, margins = Margins.all(10f))
+        val referenz = layoutText("jubel", stil, breiterRahmen, schrift).lines.first()
+
+        // Schmaler Rahmen, gerade so breit wie die Zeile plus ein schmaler Puffer: der
+        // Zentrierungs-Puffer ist damit kleiner als der Einlaufstrich-Ueberhang, die Korrektur
+        // muss greifen.
+        val schmalerRahmen = Frame(
+            widthMm = referenz.widthMm + 2 * 10f + 0.4f,
+            heightMm = 150f,
+            margins = Margins.all(10f),
+        )
+        val korrigiert = layoutText("jubel", stil, schmalerRahmen, schrift).lines.first()
+
+        assertEquals(
+            referenz.strokes.size,
+            korrigiert.strokes.size,
+            "Unterschiedliche Anzahl Strichzuege - Zeilen sind nicht vergleichbar",
+        )
+
+        val deltasX = referenz.strokes.zip(korrigiert.strokes).flatMap { (r, k) ->
+            r.points.zip(k.points).map { (rp, kp) -> kp.x - rp.x }
+        }
+        val erwarteteVerschiebung = deltasX.first()
+        deltasX.forEach { dx ->
+            assertTrue(
+                abs(dx - erwarteteVerschiebung) < 0.01f,
+                "Buchstaben wurden nicht gleichmaessig verschoben - die Schreibschrift wuerde " +
+                    "auseinanderreissen (Verschiebung $dx statt $erwarteteVerschiebung mm)",
+            )
+        }
+
+        // Die Grundlinie darf sich nicht aendern - beide Rahmen sind gleich hoch, nur die
+        // Zentrierung unterscheidet sich.
+        referenz.strokes.zip(korrigiert.strokes).forEach { (r, k) ->
+            r.points.zip(k.points).forEach { (rp, kp) ->
+                assertTrue(abs(kp.y - rp.y) < 0.001f, "Grundlinie hat sich verschoben")
+            }
+        }
+    }
+
+    @Test
+    fun `korrigiert jede Zeile einzeln statt den ganzen Block zu verschieben`() {
+        // Gemessen in Allure: 'j' beginnt bei -387 Einheiten (Einlaufstrich), 'D' dagegen bei
+        // +85 - eine Zeile braucht die Korrektur also, die andere nicht. Wuerde der Ausgleich
+        // ueber alle Zeilen gemeinsam gerechnet, ruecke die 'D'-Zeile unnoetig mit ein und
+        // stuende sichtbar zu weit rechts.
+        val rahmen = Frame(widthMm = 105f, heightMm = 148f, margins = Margins.all(10f))
+        val stil = TextStyle(fontId = "allure", sizeMm = 15f)
+
+        val gemischt = layoutText("jubel\nDach", stil, rahmen, schrift)
+        val (mitEinlauf, ohneEinlauf) = gemischt.lines.map { zeile ->
+            zeile.strokes.flatMap { it.points }.minOf { it.x }
+        }
+
+        // Die 'j'-Zeile wurde bis genau auf den Rand geschoben.
+        assertTrue(
+            abs(mitEinlauf - rahmen.margins.left) < 0.01f,
+            "Zeile mit Einlaufstrich sitzt nicht am Rand: $mitEinlauf statt ${rahmen.margins.left} mm",
+        )
+
+        // Die 'D'-Zeile muss dort stehen, wo sie auch allein stuende - unbeeinflusst davon,
+        // dass eine andere Zeile im selben Text korrigiert wurde.
+        val allein = layoutText("Dach", stil, rahmen, schrift)
+            .strokes.flatMap { it.points }.minOf { it.x }
+        assertTrue(
+            abs(ohneEinlauf - allein) < 0.001f,
+            "Zeile ohne Einlaufstrich wurde mitverschoben: $ohneEinlauf statt $allein mm",
+        )
+    }
+
+    @Test
+    fun `Zeilenbreite bleibt die Vorschubbreite und nicht die Ausdehnung der Striche`() {
+        // Der Umbruch rechnet mit widthMm. Wuerde diese Breite nach der Einlaufkorrektur aus den
+        // Strichen gemessen statt vorher aus den Vorschueben, aenderten sich mit dem Fix auch die
+        // Umbruchstellen - bei Schreibschriften betraechtlich, weil sich die Buchstaben
+        // ueberlappen. Gegenprobe ohne Formelwiederholung: die Breite eines Wortes muss die Summe
+        // der Einzelbreiten seiner Buchstaben sein. Fuer Vorschubbreiten gilt das exakt, fuer
+        // eine aus den Strichen gemessene Ausdehnung nicht.
+        val rahmen = Frame(widthMm = 300f, heightMm = 148f, margins = Margins.all(10f))
+        val stil = TextStyle(fontId = "allure", sizeMm = 15f)
+        val wort = "jubel"
+
+        val ganz = layoutText(wort, stil, rahmen, schrift).lines.first().widthMm
+        val summe = wort.sumOf { zeichen ->
+            layoutText(zeichen.toString(), stil, rahmen, schrift).lines.first().widthMm.toDouble()
+        }.toFloat()
+
+        assertTrue(
+            abs(ganz - summe) < 0.01f,
+            "Zeilenbreite ist nicht mehr die Vorschubbreite: $ganz mm statt $summe mm",
+        )
+    }
+}

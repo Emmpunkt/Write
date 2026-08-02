@@ -77,7 +77,7 @@ fun layoutText(
             Align.RIGHT -> frame.margins.left + (usableWidth - width)
         }
 
-        val strokes = metrics.renderLine(lineText, startX, baselineY)
+        val strokes = einlaufKorrigiert(metrics.renderLine(lineText, startX, baselineY), frame.margins.left)
         lines += LaidOutLine(lineText, width, baselineY, strokes)
         allStrokes += strokes
     }
@@ -103,6 +103,21 @@ fun layoutText(
  * rechnerisch exakt passt, wegen Float-Rundung faelschlich einen Ueberlauf.
  */
 private const val OVERFLOW_TOLERANCE_MM = 0.1f
+
+/**
+ * Schiebt eine fertig gesetzte Zeile nach rechts, falls sie links ueber [randX] hinausragt.
+ *
+ * Die Schreibschriften bringen in ihre Anfangsglyphen einen Einlaufstrich mit - den
+ * Verbindungsstrich zum vorherigen Buchstaben, als negativer x-Wert kodiert. Am Zeilenanfang
+ * gibt es diesen Vorgaenger nicht, der Strich ragt also ueber den Rand. Verschoben wird immer
+ * die GANZE Zeile als ein Zug, nie einzelne Glyphen: sonst risse die Verbindung zwischen den
+ * Buchstaben genau dort, wo dieser Ausgleich noetig ist.
+ */
+private fun einlaufKorrigiert(strokes: List<Polyline>, randX: Float): List<Polyline> {
+    val linkesteX = strokes.flatMap { it.points }.minOfOrNull { it.x } ?: return strokes
+    val ueberhang = randX - linkesteX
+    return if (ueberhang > 0f) strokes.map { it.translate(ueberhang, 0f) } else strokes
+}
 
 private fun wrapParagraph(
     paragraph: String,

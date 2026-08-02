@@ -82,10 +82,18 @@ class PreviewSamplesTest {
         render("03-notiz-script", notiz, TextStyle("script-simplex", sizeMm = 7f), a6)
         render("04-notiz-script-zentriert", notiz, TextStyle("script-simplex", sizeMm = 7f, align = Align.CENTER), a6)
 
-        // Alle vier Schriften im Vergleich.
+        // Alle Schriften im Vergleich - der Bogen, an dem sich das Schriftbild beurteilen
+        // laesst, ohne Papier zu verbrauchen.
         val probe = "Handschrift 123 äöüß"
         Fonts.available.forEachIndexed { i, entry ->
-            render("05-${i}-${entry.id}", probe, TextStyle(entry.id, sizeMm = 9f), Frame(120f, 30f, Margins.all(5f)))
+            render("05-${i}-${entry.id}", probe, TextStyle(entry.id, sizeMm = 9f), Frame(150f, 30f, Margins.all(5f)))
+        }
+
+        // Der Fall, der Etappe 2b ausgeloest hat: bei grosser Schrift trat der Versatz
+        // zwischen den Buchstaben zutage. Dieselbe Zeile in jeder Schrift, gross gesetzt.
+        Fonts.available.forEach { entry ->
+            render("19-versatz-${entry.id}", "Etappe geschafft",
+                TextStyle(entry.id, sizeMm = 20f), Frame(230f, 45f, Margins.all(5f)))
         }
 
         // Leerfahrten sichtbar: zeigt, ob die Pfadsortierung sinnvolle Wege waehlt.
@@ -127,7 +135,7 @@ class PreviewSamplesTest {
         println("Eingepasst auf ${eingepasst.sizeMm} mm (passt=${eingepasst.fits})")
 
         val erzeugt = outDir.listFiles { f: File -> f.extension == "png" }?.size ?: 0
-        assertTrue(erzeugt >= 19, "Es wurden nur $erzeugt Musterbilder erzeugt")
+        assertTrue(erzeugt >= 30, "Es wurden nur $erzeugt Musterbilder erzeugt")
         println("Musterbilder in ${outDir.absolutePath}")
     }
 }

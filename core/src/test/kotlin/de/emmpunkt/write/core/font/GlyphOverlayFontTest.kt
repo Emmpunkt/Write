@@ -90,6 +90,52 @@ class GlyphOverlayFontTest {
         val font = Fonts.load("sans")
         assertTrue(font.unsupportedCharacters("Hallo\nWelt").isEmpty())
     }
+
+    @Test
+    fun `laesst den Strich der Basisschrift stehen, wenn die Korrektur aus ist`() {
+        // Nutze den Raw HersheyFont direkt, damit die Korrektur messbar ist.
+        val content = readResource("fonts/futural.jhf")
+        val basisRaw = HersheyFont.parse("sans", "Technisch", content)
+        val eigen = assertNotNull(basisRaw.glyph('-'.code))
+
+        val ohneKorrektur = GlyphOverlayFont(basisRaw, stricheErsetzen = false)
+        val durchgereicht = assertNotNull(ohneKorrektur.glyph('-'.code))
+
+        assertEquals(eigen.advance, durchgereicht.advance)
+        assertEquals(
+            eigen.strokes.flatMap { it.points }.map { it.x },
+            durchgereicht.strokes.flatMap { it.points }.map { it.x },
+        )
+    }
+
+    @Test
+    fun `ersetzt den Strich weiterhin, wenn die Korrektur an ist`() {
+        // Nutze den Raw HersheyFont direkt, um die Korrektur zu testen.
+        val content = readResource("fonts/futural.jhf")
+        val basis = HersheyFont.parse("sans", "Technisch", content)
+        val eigen = assertNotNull(basis.glyph('-'.code))
+        val korrigiert = assertNotNull(GlyphOverlayFont(basis).glyph('-'.code))
+
+        assertTrue(
+            korrigiert.advance < eigen.advance,
+            "Der nachgezeichnete Strich muss schmaler sein als Hersheys eigener",
+        )
+    }
+
+    private fun readResource(path: String): String {
+        val stream = GlyphOverlayFontTest::class.java.classLoader?.getResourceAsStream(path)
+            ?: error("Schriftdatei '$path' nicht im Paket gefunden")
+        return stream.bufferedReader(Charsets.ISO_8859_1).use { it.readText() }
+    }
+
+    @Test
+    fun `ersetzt typografische Zeichen auch bei abgeschalteter Strich-Korrektur`() {
+        // Android-Tastaturen setzen diese Zeichen selbsttaetig ein; ohne Ersetzung entstuenden
+        // Luecken im geplotteten Text. Das gilt unabhaengig von der Strich-Korrektur.
+        val font = GlyphOverlayFont(Fonts.load("sans"), stricheErsetzen = false)
+        assertNotNull(font.glyph(0x2019), "typografischer Apostroph muss ersetzt werden")
+        assertNotNull(font.glyph(0x201C), "geschwungenes Anfuehrungszeichen muss ersetzt werden")
+    }
 }
 
 /**

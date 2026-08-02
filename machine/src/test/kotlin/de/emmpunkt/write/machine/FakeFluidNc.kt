@@ -29,6 +29,21 @@ class FakeFluidNc(
      * Soft Limits, solange die Maschine als nicht referenziert gilt.
      */
     @Volatile var rejectMovesAfterReset: Boolean = false,
+    /**
+     * Arbeitsnullpunkt (G54), den der Statusbericht als WCO meldet.
+     *
+     * Am Geraet des Nutzers steht er auf (2, 2) und nicht auf null - genau diese Verschiebung
+     * verkuerzt den fahrbaren Weg gegenueber dem eingestellten Arbeitsbereich.
+     */
+    @Volatile var wco: Triple<Float, Float, Float> = Triple(0f, 0f, 0f),
+    /**
+     * Ob der Statusbericht WCO mitschickt.
+     *
+     * Der Plotter des Nutzers tut das NICHT ($10=1) - dort ist die Abfrage per `$#` der
+     * einzige Weg an den Arbeitsnullpunkt. Mit `false` laesst sich der Fall nachstellen,
+     * in dem er unbekannt bleibt.
+     */
+    @Volatile var sendWco: Boolean = true,
 ) : Closeable {
 
     private val server = ServerSocket(0, 1, InetAddress.getLoopbackAddress())
@@ -147,7 +162,14 @@ class FakeFluidNc(
                     c == Commands.STATUS_QUERY -> {
                         realtime += c
                         synchronized(output) {
-                            send("<$state|MPos:10.000,20.000,3.000|FS:0,0|WCO:0.000,0.000,0.000>")
+                            send(
+                                if (sendWco) {
+                                    "<$state|MPos:10.000,20.000,3.000|FS:0,0|" +
+                                        "WCO:${wco.first},${wco.second},${wco.third}>"
+                                } else {
+                                    "<$state|MPos:10.000,20.000,3.000|FS:0,0>"
+                                },
+                            )
                         }
                     }
                     c == Commands.FEED_HOLD || c == Commands.CYCLE_START ||

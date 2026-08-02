@@ -206,6 +206,45 @@ class PreflightTest {
         }
 
     @Test
+    fun `Arbeitsnullpunkt verkuerzt den fahrbaren Weg`() = kotlinx.coroutines.test.runTest {
+        // Der Fall vom Geraet des Nutzers: G54 liegt auf (2, 2). Ein Text bis X = 154 liegt
+        // unter dem eingestellten Arbeitsbereich von 155 - die Maschine muesste dafuer aber
+        // auf 156 fahren. Die Firmware quittiert das nicht vorab, sondern bricht mitten im
+        // Auftrag mit ALARM:2 ab - dann ist das Blatt halb beschrieben.
+        FakeFluidNc(wco = Triple(2f, 2f, 0f)).use { fake ->
+            val c = controller(fake)
+            c.connect().getOrThrow()
+            c.requestStatus()
+
+            val probleme = c.preflight(strokes(154f, 80f), istGehomt = true)
+            assertTrue(
+                probleme.any { it.contains("rechts") },
+                "Arbeitsnullpunkt wurde bei der Grenzpruefung uebergangen: $probleme",
+            )
+            c.disconnect()
+        }
+    }
+
+    @Test
+    fun `ohne bekannten Arbeitsnullpunkt wird nicht gesendet`() = kotlinx.coroutines.test.runTest {
+        // Solange der Versatz nicht geholt werden konnte, ist jede Grenze geraten. Lieber
+        // gar nicht fahren als auf gut Glueck. Nachgestellt wie am echten Geraet: der
+        // Statusbericht enthaelt kein WCO, und auf `$#` kommt hier keine G54-Zeile.
+        FakeFluidNc(sendWco = false).use { fake ->
+            val c = controller(fake)
+            c.connect().getOrThrow()
+            c.requestStatus()
+
+            val probleme = c.preflight(strokes(100f, 80f), istGehomt = true)
+            assertTrue(
+                probleme.any { it.contains("Arbeitsnullpunkt") },
+                "Unbekannter Arbeitsnullpunkt wurde stillschweigend als 0 angenommen: $probleme",
+            )
+            c.disconnect()
+        }
+    }
+
+    @Test
     fun `Papier-Offset geht in die Grenzpruefung ein`() = kotlinx.coroutines.test.runTest {
         FakeFluidNc().use { fake ->
             // Blatt liegt 20 mm weiter rechts; ein Text bis 145 mm auf dem Blatt landet damit

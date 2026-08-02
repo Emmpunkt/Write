@@ -36,12 +36,19 @@ interface StrokeFont {
     val capHeightUnits: Float
 
     /**
-     * Hoechster Punkt ueber allen Glyphen. Bestimmt, wie weit die erste Zeile vom oberen Rand
-     * wegbleiben muss, damit nichts herausragt.
+     * Hoechster Punkt ueber dem Zeichenvorrat, den der Nutzer im Editor tatsaechlich eintippen
+     * kann (ASCII 32-126, deutsche Sonderzeichen, Gedankenstriche). Bestimmt, wie weit die
+     * erste Zeile vom oberen Rand wegbleiben muss, damit nichts herausragt.
+     *
+     * Bewusst nicht ueber alle Glyphen der Schriftdatei: manche mitgelieferten Schriften
+     * enthalten weit mehr Zeichen als der Nutzer erreichen kann (Latin-Extended-
+     * Akzentbuchstaben), und die ragen zum Teil deutlich ueber die Versalhoehe hinaus. Wuerden
+     * sie mitgezaehlt, hielte "Einpassen" bei jeder Notiz in diesen Schriften unnoetig viel
+     * Kopfabstand frei - unabhaengig davon, ob ein solches Zeichen ueberhaupt vorkommt.
      */
     val ascenderUnits: Float
 
-    /** Tiefste Unterlaenge (negativ) ueber allen Glyphen. */
+    /** Tiefste Unterlaenge (negativ) ueber demselben erreichbaren Zeichenvorrat, s. [ascenderUnits]. */
     val descenderUnits: Float
 
     /**

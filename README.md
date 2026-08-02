@@ -10,7 +10,7 @@ damit vollständig auf dem PC testbar – ohne Gerät, ohne Emulator, ohne Plott
 
 | Modul | Inhalt |
 |---|---|
-| `core` | Schriften (JHF-Parser, Umlaut-Komposition), Textsatz, Geometrie, G-Code |
+| `core` | Schriften (JHF- und SVG-Parser, Umlaut-Komposition), Textsatz, Geometrie, G-Code |
 | `machine` | FluidNC-Protokoll, Telnet-Transport, Streaming, Sicherheitsprüfungen |
 | `app` | Compose-Oberfläche: Editor mit Vorschau, Maschine, Einstellungen |
 
@@ -23,7 +23,7 @@ zweite Darstellung. Was auf dem Bildschirm steht, fährt der Stift.
 ## Bauen und installieren
 
 ```bash
-./gradlew test                 # 94 Tests, ohne Netz und ohne Gerät
+./gradlew test                 # 106 Tests, ohne Netz und ohne Gerät
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
@@ -63,24 +63,44 @@ dort auf 0, wo die Achse gerade steht, und muss neu gesetzt werden.
 
 ## Schriften
 
-Hershey-Vektorschriften im JHF-Format (`core/src/main/resources/fonts/`), gemeinfrei.
-Enthalten sind zwei Schreibschriften und zwei technische Schriften.
+Sieben einlinige Schriften, alle gemeinfrei oder unter freier Lizenz
+(`core/src/main/resources/fonts/`).
 
-Die Dateien decken nur ASCII 32–126 ab. `GlyphOverlayFont` ergänzt, was für deutsche Notizen
-fehlt: Umlaute durch aufgesetztes Trema, ß und € als handdefinierte Glyphen, und typografische
-Zeichen (Gedankenstriche, geschwungene Anführungszeichen), die Android-Tastaturen selbsttätig
-einsetzen, werden auf ihre ASCII-Entsprechung abgebildet.
+**Vier SVG-Schreibschriften** aus dem Projekt [svg-fonts](https://gitlab.com/oskay/svg-fonts):
+Allure, Zierschrift, Einladung und Druckschrift (EMS Allure, EMS Decorous Script, EMS Invite,
+EMS Delight). Geschaffen von Sheldon B. Michaels, die Umsetzung ins SVG-Font-Format von
+Windell H. Oskay – beide Namen stehen so in den Metadaten jeder SVG-Datei. Jede ist die
+Bearbeitung einer bestehenden Schrift: Allure von *Allura* (Rob Leuschke, TypeSETit),
+Zierschrift von *Petit Formal Script* (Impallari Type), Einladung von *Tangerine* (Toshi
+Omagari) und Druckschrift von *Delius* (Natalia Raices) – ebenfalls aus den Metadaten der
+jeweiligen Datei. Lizenz **SIL Open Font License**: `EMS-OFL.txt` enthält nur den Lizenztext
+mit ungefüllten Platzhaltern (`Copyright (c) <dates>, <Copyright Holder>`), keine Namen; die
+Urheberangabe muss deshalb hier stehen. Drei davon sind echte verbundene Kursiven; sie bringen
+Umlaute, ß, € und die Gedankenstriche selbst mit.
+
+**Drei Hershey-Vektorschriften** im JHF-Format: Schreibschrift, Technisch und Serif. Sie laufen
+schmaler als die SVG-Schriften und eignen sich deshalb weiter für viel Text auf kleinem Blatt.
+Sie decken nur ASCII 32–126 ab; `GlyphOverlayFont` ergänzt Umlaute durch aufgesetztes Trema,
+ß und € als handdefinierte Glyphen und bildet typografische Zeichen auf ihre ASCII-Entsprechung
+ab. Attribution siehe `HERSHEY-NOTICE.txt` – die Nennung von A. V. Hershey und James Hurt ist
+Auflage der Nutzungsbedingung.
+
+### Warum die Größenangabe aus den Glyphen kommt
+
+Die Schriftgröße der App ist die Versalhöhe in Millimetern, am Papier nachmessbar. Die
+SVG-Dateien geben dafür durchweg `cap-height="500"` an – gemessen sind es aber 639 bis 939.
+Der Parser leitet die Versalhöhe deshalb aus der tatsächlichen Höhe des `H` ab, so wie es der
+JHF-Parser schon tut. Nur so bedeutet eine eingestellte Größe in jeder Schrift dasselbe.
 
 ### Waagerechte Striche
 
 Die Hershey-Schriften bringen einen Bindestrich von 0,86 Versalhöhen mit – breiter als jeder
 Kleinbuchstabe – und setzen ihn auf deren Oberkante. Im Fließtext fällt beides auf.
 `GlyphOverlayFont` ersetzt ihn deshalb: 0,30 Versalhöhen lang, auf halber x-Höhe, mit
-0,14 Versalhöhen Luft an jeder Seite. Halbgeviert- (0,50) und Geviertstrich (0,70) sind eigene Längen, weil das
-im Deutschen verschiedene Zeichen sind. Abgesichert durch `StricheTest`.
+0,14 Versalhöhen Luft an jeder Seite. Halbgeviert- (0,50) und Geviertstrich (0,70) sind eigene
+Längen, weil das im Deutschen verschiedene Zeichen sind. Abgesichert durch `StricheTest`.
 
-Attribution siehe `core/src/main/resources/fonts/HERSHEY-NOTICE.txt` – die Nennung von
-A. V. Hershey und James Hurt ist Auflage der Nutzungsbedingung.
+Bei den SVG-Schriften bleibt diese Korrektur **aus** – deren eigene Striche sind brauchbar.
 
 ## Schreibreihenfolge
 
@@ -173,10 +193,15 @@ Sie liegen im `MachineController`, nicht in der Oberfläche – ein zweiter Aufr
 
 Der Code steht unter der MIT-Lizenz (siehe `LICENSE`).
 
-**Ausgenommen sind die Schriftdaten** unter `core/src/main/resources/fonts/` (`*.jhf`): Das
-sind die Hershey-Vektorschriften. Ihre Nutzung ist an die Nennung von Dr. A. V. Hershey
-(ursprünglicher Urheber) und James Hurt (Format) gebunden. Der vollständige Wortlaut liegt in
-`HERSHEY-NOTICE.txt` im selben Verzeichnis und ist mit den Schriftdaten weiterzugeben.
+**Ausgenommen sind die Schriftdaten** unter `core/src/main/resources/fonts/`:
+
+- Die Hershey-Vektorschriften (`*.jhf`). Ihre Nutzung ist an die Nennung von Dr. A. V. Hershey
+  (ursprünglicher Urheber) und James Hurt (Format) gebunden. Der vollständige Wortlaut liegt in
+  `HERSHEY-NOTICE.txt` im selben Verzeichnis und ist mit den Schriftdaten weiterzugeben.
+- Die vier EMS-SVG-Schriften (`*.svg`), lizenziert unter der SIL Open Font License. Urheber:
+  Sheldon B. Michaels (Schrift), Windell H. Oskay (SVG-Umsetzung); Ursprungsschriften und deren
+  Gestalter stehen im Abschnitt „Schriften" oben. `EMS-OFL.txt` trägt den Lizenzwortlaut, aber
+  keine ausgefüllte Copyright-Zeile – die Namen oben schließen diese Lücke.
 
 ## Stand
 
@@ -184,7 +209,9 @@ sind die Hershey-Vektorschriften. Ihre Nutzung ist an die Nennung von Dr. A. V. 
 Einstellungen. 86 Tests grün, APK gebaut und auf dem Gerät installiert. Die App verbindet
 sich mit dem Plotter und zeigt Zustand und Position korrekt an (verifiziert am 2026-08-01).
 
-**Etappe 2a steht:** Einpassen und die vier Feintuning-Regler.
+- **Etappe 2a steht:** Einpassen und die vier Feintuning-Regler.
+- **Etappe 2b steht:** vier verbundene SVG-Schreibschriften, Hershey-Kalligrafie entfernt.
+- **Etappe 3:** Notizliste, Vorlagen mit Platzhaltern, gemischte Stile, Upload auf SD.
 
 Hinweis zur Installation: Über USB brach die Übertragung reproduzierbar ab (Gerät ging
 mitten im Streamed Install offline). Über WLAN läuft sie zuverlässig:
@@ -195,10 +222,7 @@ adb -s <handy-ip>:5555 install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 Noch offen:
-- **Es wurde noch nie tatsächlich geplottet.** `Z oben`/`Z unten` und der Papier-Versatz
-  sind ungemessene Annahmen (3 / −1.5 mm). Vor dem ersten Blatt einmessen, und den ersten
-  Durchlauf mit `Z unten = Z oben` trocken fahren.
 - Die Z-Achse hat keinen Endschalter und wird nicht referenziert. Ihr Nullpunkt entsteht nur
   über „Z hier nullen" und ist nach einem Neustart der Steuerung erneut zu setzen.
-- **Etappe 2b:** SVG-Script-Fonts (EMS Allure, EMS Casual Script), danach Rahmen und Linien.
-- **Etappe 3:** Notizliste, Vorlagen mit Platzhaltern, gemischte Stile, Upload auf SD.
+- **Die neuen SVG-Schriften wurden noch nicht am Gerät bedient und noch nicht an der Maschine
+  erprobt.** Das Probeblatt in Allure bei 25 mm, das den Anschluss zeigen soll, steht noch aus.
