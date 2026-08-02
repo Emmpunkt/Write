@@ -23,7 +23,7 @@ zweite Darstellung. Was auf dem Bildschirm steht, fährt der Stift.
 ## Bauen und installieren
 
 ```bash
-./gradlew test                 # 86 Tests, ohne Netz und ohne Gerät
+./gradlew test                 # 93 Tests, ohne Netz und ohne Gerät
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
@@ -104,6 +104,17 @@ träfe regelmäßig daneben. Stattdessen:
 
 Abgesichert durch `WorttrennungTest`.
 
+## Schriftbild einstellen
+
+Im Editor stellt „Schriftbild…" vier Regler auf: Laufweite, Wortabstand, Zeilenabstand und
+Neigung. Die Vorschau folgt sofort; gespeichert wird der Wert erst, wenn der Finger den Regler
+loslässt – sonst schriebe ein einziger Zug dutzende Male auf den Speicher.
+
+„Einpassen" neben dem Größenregler sucht die größte Schriftgröße, bei der der Text in den
+Rahmen passt, **ohne** dass ein Wort hart getrennt werden muss. Gesucht wird durch
+Intervallhalbierung auf dem Zehntelmillimeter-Raster des Reglers; findet sich keine passende
+Größe, bleibt die eingestellte stehen und die App sagt es, statt eine unlesbare zu setzen.
+
 ## Warum nur Telnet
 
 Die Weboberfläche nimmt Befehle unter `/command` zwar entgegen, liefert die Antworten aber über
@@ -183,5 +194,6 @@ Noch offen:
   Durchlauf mit `Z unten = Z oben` trocken fahren.
 - Die Z-Achse hat keinen Endschalter und wird nicht referenziert. Ihr Nullpunkt entsteht nur
   über „Z hier nullen" und ist nach einem Neustart der Steuerung erneut zu setzen.
-- **Etappe 2:** SVG-Script-Fonts, Auto-Fit, Feintuning, Rahmen und Linien.
+- **Etappe 2a steht:** Einpassen und die vier Feintuning-Regler.
+- **Etappe 2b:** SVG-Script-Fonts (EMS Allure, EMS Casual Script), danach Rahmen und Linien.
 - **Etappe 3:** Notizliste, Vorlagen mit Platzhaltern, gemischte Stile, Upload auf SD.

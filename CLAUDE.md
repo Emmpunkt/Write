@@ -64,17 +64,19 @@ adb -s 192.168.2.30:5555 install -r app/build/outputs/apk/debug/app-debug.apk
 - Schriftbild ansehen (rendert fertigen G-Code zurück nach PNG):
   `./gradlew :core:test --tests '*PreviewSamplesTest*'` → `core/build/preview/`
 
-## Etappe 2 – „Schön" (als Nächstes)
+## Etappe 2a abgeschlossen (2026-08-02)
+
+Auto-Fit (`fitSize` im core) und die vier Feintuning-Regler im Editor. Reglerwerte gehen
+während des Zugs nur in den Zustand, gespeichert wird beim Loslassen (`updateSettingsLive` /
+`commitSettings` im ViewModel).
+
+## Etappe 2b – „Schön" (als Nächstes)
 
 1. **SVG-Script-Fonts** (EMS Allure, EMS Casual Script, SIL OFL). Hershey-Script verbindet die
    Buchstaben nur teilweise; die EMS-Schriften sind echte verbundene Kursiven. Erfordert einen
    zweiten Font-Parser hinter der bestehenden `StrokeFont`-Schnittstelle – der Rest der App
    merkt davon nichts.
-2. **Auto-Fit**: Schriftgröße per Intervallhalbierung so einschachteln, dass der Text in den
-   Rahmen passt. `layoutText` ist bereits darauf ausgelegt.
-3. **Feintuning-Regler** in der Oberfläche (Laufweite, Wortabstand, Zeilenabstand, Neigung –
-   im Datenmodell alles vorhanden, nur in den Einstellungen noch roh).
-4. **Dekor**: Rahmen, Trennlinien, Unterstreichungen, Aufzählungspunkte.
+2. **Dekor**: Rahmen, Trennlinien, Unterstreichungen, Aufzählungspunkte.
 
 ## Etappe 3 – „Bequem"
 
