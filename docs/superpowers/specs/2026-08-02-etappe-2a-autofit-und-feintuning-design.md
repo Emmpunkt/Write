@@ -84,10 +84,18 @@ Die Halbierung setzt voraus, dass eine kleinere Groesse eher passt als eine groe
 nicht streng: der Zeilenumbruch ist eine Treppenfunktion, ein Wort kann bei einer Winzigkeit
 weniger eine Zeile hochrutschen und die Gesamthoehe damit springen lassen.
 
-Deshalb wird der gefundene Wert **abschliessend mit `layoutText` geprueft** und, falls er wider
-Erwarten nicht passt, in 0,1er-Schritten gesenkt – hoechstens 20 Schritte, danach gilt das
-Ergebnis als nicht gefunden. Der zurueckgegebene Wert passt damit garantiert oder ist als
-`fits = false` gekennzeichnet.
+Die Suche haelt deshalb eine **Invariante** durch: die untere Schranke ist immer eine bereits
+geprueft passende Stufe, die obere immer eine geprueft nicht passende. Beide Schranken sind
+tatsaechlich geprueft, nicht erschlossen – die Nichtmonotonie kann ihnen damit nichts anhaben.
+
+Am Ende der Halbierung liegen die Schranken eine Stufe auseinander. Dieselbe Invariante liefert
+damit beides, worauf es ankommt: **das Ergebnis passt, und eine Stufe groesser passt nicht.**
+Eine Nachkorrektur eruebrigt sich.
+
+Was die Invariante **nicht** zusichert: dass es jenseits der oberen Schranke keine noch
+groessere passende Stufe gibt. Sicher waere das bei einer Treppenfunktion nur mit der
+vollstaendigen Suche ueber alle 230 Stufen – das Zwanzigfache an Rechenzeit fuer einen Fall,
+der in echten Notizen nicht vorkommt. Bewusst nicht gemacht.
 
 ### Grenzfaelle
 
@@ -178,8 +186,8 @@ Neue `core/src/test/kotlin/de/emmpunkt/write/core/layout/AutoFitTest.kt`:
 5. Ein sehr langes Wort auf schmalem Blatt liefert `fits = false`, nicht eine Groesse, bei der
    das Wort weiterhin hart getrennt wuerde.
 6. Leerer Text stuerzt nicht ab und liefert `maxMm`.
-7. Ein Fall, in dem die reine Halbierung danebengreift, landet dank der Abwaertskorrektur
-   trotzdem auf einem passenden Wert.
+7. Die Invariante traegt breit: fuer mehrere verschiedene Texte und Rahmen gilt jedes Mal
+   beides – das Ergebnis passt, und eine Stufe groesser passt nicht.
 
 Erweiterung von `PreviewSamplesTest`: Musterbilder mit verschiedenen Feintuning-Werten
 (enge und weite Laufweite, geneigt, enger Zeilenabstand). Damit laesst sich das Schriftbild am
