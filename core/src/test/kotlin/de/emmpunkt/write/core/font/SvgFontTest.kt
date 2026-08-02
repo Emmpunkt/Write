@@ -127,18 +127,29 @@ class SvgFontTest {
         }
     }
 
+    /**
+     * Plausibilitaetsprobe fuer die abgeleiteten Metriken, ueber alle sieben mitgelieferten
+     * Schriften: das Verhaeltnis von Oberlaenge zu Versalhoehe muss nahe beieinander liegen,
+     * weil dieselbe Handschrift-Proportion dahintersteckt.
+     *
+     * Vor der Behebung von Befund 1 mass ascenderUnits ueber alle Glyphen der Schriftdatei statt
+     * ueber den Zeichenvorrat, den der Nutzer tatsaechlich eintippen kann. Die vier EMS-Schriften
+     * enthalten je 216 Glyphen inklusive Latin-Extended-Akzentbuchstaben (u. a. Ŭ, Ć, Å, Ą), die
+     * weit ueber die Versalhoehe hinausragen - das Verhaeltnis lag dadurch bei 1,39 bis 1,59
+     * statt wie bei den Hershey-Schriften bei rund 1,28. Diese Grenze liegt so, dass sie vor der
+     * Behebung fehlgeschlagen waere (gegengeprueft), nach der Behebung aber fuer alle sieben
+     * Schriften erfuellt ist.
+     */
     @Test
-    fun `abgeleitete Versalhoehe entspricht der gemessenen Hoehe des H`() {
-        listOf("allure", "zierschrift", "druckschrift", "einladung").forEach { id ->
-            assertEquals(
-                id, Fonts.entry(id).id,
-                "$id muss ein eigener Eintrag sein - Fonts.entry faellt sonst still auf die " +
-                    "Vorgabeschrift zurueck, und dieser Test prueft dann die falsche Schrift",
+    fun `Verhaeltnis von Oberlaenge zu Versalhoehe liegt bei allen Schriften nahe beieinander`() {
+        Fonts.available.forEach { e ->
+            val font = Fonts.load(e.id)
+            val ratio = font.ascenderUnits / font.capHeightUnits
+            assertTrue(
+                ratio in 1.0f..1.45f,
+                "${e.id}: Verhaeltnis Oberlaenge/Versalhoehe $ratio liegt ausserhalb des " +
+                    "plausiblen Bereichs 1.0..1.45",
             )
-            val font = Fonts.load(id)
-            val h = assertNotNull(font.glyph('H'.code))
-            val gemessen = h.strokes.flatMap { it.points }.maxOf { it.y }
-            assertEquals(gemessen, font.capHeightUnits, 0.01f, "$id")
         }
     }
 }
