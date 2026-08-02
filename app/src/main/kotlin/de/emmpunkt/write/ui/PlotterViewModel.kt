@@ -121,7 +121,14 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
 
         val s = _settings.value
         val ergebnis = runCatching {
-            fitSize(text, s.toTextStyle(), s.toFrame(), Fonts.load(s.fontId))
+            fitSize(
+                text,
+                s.toTextStyle(),
+                s.toFrame(),
+                Fonts.load(s.fontId),
+                minMm = AppSettings.SCHRIFTGROESSE_MIN_MM,
+                maxMm = AppSettings.SCHRIFTGROESSE_MAX_MM,
+            )
         }.getOrElse { e ->
             _machine.update { it.copy(message = "Einpassen nicht moeglich: ${e.message}") }
             return

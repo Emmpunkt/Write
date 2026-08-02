@@ -5,6 +5,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -80,6 +81,16 @@ class AutoFitTest {
 
         assertFalse(ergebnis.fits, "Ohne Trennstelle darf kein Erfolg gemeldet werden")
         assertEquals(2f, ergebnis.sizeMm, 0.001f, "Bei Misserfolg wird die Untergrenze geliefert")
+    }
+
+    @Test
+    fun `Intervall schmaler als eine Rasterstufe wirft`() {
+        assertFailsWith<IllegalArgumentException> {
+            fitSize(
+                "Hallo", stil, a6quer, font,
+                minMm = 5.05f, maxMm = 5.09f, stepMm = 0.1f,
+            )
+        }
     }
 
     @Test

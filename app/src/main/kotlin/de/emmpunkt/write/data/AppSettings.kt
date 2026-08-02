@@ -61,6 +61,20 @@ data class AppSettings(
     /** Zuletzt bearbeiteter Text, damit nach dem Neustart nichts verloren ist. */
     val lastText: String = "",
 ) {
+    companion object {
+        /**
+         * Grenzen des Groessenreglers im Editor.
+         *
+         * fitSize() im core-Modul bekommt dieselben Werte als minMm/maxMm mitgegeben. Waeren
+         * Reglerbereich und Suchbereich unterschiedlich, koennte "Einpassen" eine Groesse
+         * liefern, die der Regler gar nicht darstellen kann - genau das fuehrte dazu, dass der
+         * Reglerknopf bei einem sehr langen Text links festklebte, waehrend die Anzeige 2 mm
+         * zeigte.
+         */
+        const val SCHRIFTGROESSE_MIN_MM = 3f
+        const val SCHRIFTGROESSE_MAX_MM = 25f
+    }
+
     fun toMachineProfile() = MachineProfile(
         zUpMm = zUpMm,
         zDownMm = zDownMm,

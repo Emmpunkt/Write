@@ -23,7 +23,7 @@ zweite Darstellung. Was auf dem Bildschirm steht, fährt der Stift.
 ## Bauen und installieren
 
 ```bash
-./gradlew test                 # 93 Tests, ohne Netz und ohne Gerät
+./gradlew test                 # 94 Tests, ohne Netz und ohne Gerät
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
@@ -115,6 +115,10 @@ Rahmen passt, **ohne** dass ein Wort hart getrennt werden muss. Gesucht wird dur
 Intervallhalbierung auf dem Zehntelmillimeter-Raster des Reglers; findet sich keine passende
 Größe, bleibt die eingestellte stehen und die App sagt es, statt eine unlesbare zu setzen.
 
+Die Breitenmessung dabei berücksichtigt die Neigung nicht – bei starker Neigung kann die
+Schrift deshalb seitlich etwas über den eingestellten Rand hinausragen; bei kräftiger Neigung
+lohnt sich also ein größerer Rand.
+
 ## Warum nur Telnet
 
 Die Weboberfläche nimmt Befehle unter `/command` zwar entgegen, liefert die Antworten aber über
@@ -180,6 +184,8 @@ sind die Hershey-Vektorschriften. Ihre Nutzung ist an die Nennung von Dr. A. V. 
 Einstellungen. 86 Tests grün, APK gebaut und auf dem Gerät installiert. Die App verbindet
 sich mit dem Plotter und zeigt Zustand und Position korrekt an (verifiziert am 2026-08-01).
 
+**Etappe 2a steht:** Einpassen und die vier Feintuning-Regler.
+
 Hinweis zur Installation: Über USB brach die Übertragung reproduzierbar ab (Gerät ging
 mitten im Streamed Install offline). Über WLAN läuft sie zuverlässig:
 
@@ -194,6 +200,5 @@ Noch offen:
   Durchlauf mit `Z unten = Z oben` trocken fahren.
 - Die Z-Achse hat keinen Endschalter und wird nicht referenziert. Ihr Nullpunkt entsteht nur
   über „Z hier nullen" und ist nach einem Neustart der Steuerung erneut zu setzen.
-- **Etappe 2a steht:** Einpassen und die vier Feintuning-Regler.
 - **Etappe 2b:** SVG-Script-Fonts (EMS Allure, EMS Casual Script), danach Rahmen und Linien.
 - **Etappe 3:** Notizliste, Vorlagen mit Platzhaltern, gemischte Stile, Upload auf SD.

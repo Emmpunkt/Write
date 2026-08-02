@@ -228,7 +228,7 @@ private fun StilLeiste(
                 value = settings.sizeMm,
                 onValueChange = { v -> onChangeLive { it.copy(sizeMm = auf(v, 0.1f)) } },
                 onValueChangeFinished = onCommit,
-                valueRange = 3f..25f,
+                valueRange = AppSettings.SCHRIFTGROESSE_MIN_MM..AppSettings.SCHRIFTGROESSE_MAX_MM,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
             )
             Text("${settings.sizeMm.fmt()} mm", style = MaterialTheme.typography.bodyMedium)
@@ -258,7 +258,7 @@ private fun StilLeiste(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(onClick = { feintuningOffen = !feintuningOffen }) {
-                Text(if (feintuningOffen) "Schriftbild ausblenden" else "Schriftbild…")
+                Text(if (feintuningOffen) "Schriftbild aus" else "Schriftbild…")
             }
             if (feintuningOffen) {
                 TextButton(
@@ -361,7 +361,7 @@ private fun StilRegler(
  * Rundet auf ein Vielfaches von [schritt].
  *
  * Ohne das lieferte der Regler beliebige Zwischenwerte - die Anzeige zappelte, und
- * „Einpassen" naennte eine Groesse, die sich von Hand nicht wieder treffen laesst.
+ * „Einpassen" nennte eine Groesse, die sich von Hand nicht wieder treffen laesst.
  */
 private fun auf(wert: Float, schritt: Float): Float =
     ((wert / schritt).roundToInt() * schritt.toDouble()).toFloat()

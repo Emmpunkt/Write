@@ -7,7 +7,8 @@ import kotlin.math.floor
 /**
  * Ergebnis der Groessensuche.
  *
- * @param sizeMm die gefundene Versalhoehe; bei [fits] = false die unveraenderte Untergrenze.
+ * @param sizeMm die gefundene Versalhoehe; bei [fits] = false die gepruefte Untergrenze (auf dem
+ *   Raster [stepMm], kann also minimal von der uebergebenen Untergrenze abweichen).
  * @param fits ob ueberhaupt eine passende Groesse gefunden wurde. Bei false darf die App die
  *   Groesse NICHT setzen, sondern muss es melden - sonst schriebe sie in dem Glauben los,
  *   eingepasst zu haben.
@@ -25,7 +26,12 @@ data class FitResult(val sizeMm: Float, val fits: Boolean)
  * derselben Laufweite und demselben Zeilenabstand rechnet, die spaeter gefahren werden.
  *
  * Gesucht wird auf dem Raster [stepMm] - demselben, das der Regler in der App anbietet. Sonst
- * naennte die App eine Groesse, die sich von Hand gar nicht mehr einstellen laesst.
+ * nennte die App eine Groesse, die sich von Hand gar nicht mehr einstellen laesst.
+ *
+ * Die Breitenmessung (siehe Metrics.widthOf in TextLayout.kt) rechnet die Scherung durch
+ * [TextStyle.slantDeg] nicht mit ein - die entsteht erst beim Zeichnen. Bei starker Neigung
+ * kann der Kopf des letzten Buchstabens einer Zeile deshalb ueber den Rahmen hinausragen, obwohl
+ * fitSize() Erfolg meldet.
  */
 fun fitSize(
     text: String,
@@ -40,20 +46,24 @@ fun fitSize(
     require(maxMm >= minMm) { "Obergrenze liegt unter der Untergrenze" }
     require(stepMm > 0f) { "Schrittweite muss positiv sein" }
 
-    if (text.isBlank()) return FitResult(maxMm, fits = true)
-
     fun groesse(stufe: Int): Float = (stufe.toDouble() * stepMm.toDouble()).toFloat()
+
+    val unterste = ceil(minMm / stepMm - RASTER_TOLERANZ).toInt()
+    val oberste = floor(maxMm / stepMm + RASTER_TOLERANZ).toInt()
+    require(unterste <= oberste) {
+        "Intervall [$minMm, $maxMm] mm ist schmaler als eine Rasterstufe von $stepMm mm - " +
+            "keine Stufe liegt darin"
+    }
+
+    if (text.isBlank()) return FitResult(maxMm, fits = true)
 
     fun passt(stufe: Int): Boolean {
         val laid = layoutText(text, style.copy(sizeMm = groesse(stufe)), frame, font)
         return !laid.overflow && laid.overlongWords.isEmpty()
     }
 
-    val unterste = ceil(minMm / stepMm - RASTER_TOLERANZ).toInt()
-    val oberste = floor(maxMm / stepMm + RASTER_TOLERANZ).toInt()
-
-    if (passt(oberste)) return FitResult(maxMm, fits = true)
-    if (!passt(unterste)) return FitResult(minMm, fits = false)
+    if (passt(oberste)) return FitResult(groesse(oberste), fits = true)
+    if (!passt(unterste)) return FitResult(groesse(unterste), fits = false)
 
     // Invariante: [unten] passt geprueft, [oben] passt geprueft nicht. Sie traegt auch dann,
     // wenn "kleiner passt eher" einmal nicht gilt - der Zeilenumbruch ist eine Treppe, kein
