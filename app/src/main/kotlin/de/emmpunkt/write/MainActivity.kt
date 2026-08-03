@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
@@ -36,6 +37,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import de.emmpunkt.write.ui.EditorScreen
 import de.emmpunkt.write.ui.MachineScreen
 import de.emmpunkt.write.ui.PlotterViewModel
+import de.emmpunkt.write.ui.SerieScreen
 import de.emmpunkt.write.ui.SettingsScreen
 
 class MainActivity : ComponentActivity() {
@@ -48,8 +50,11 @@ class MainActivity : ComponentActivity() {
 
 private enum class Reiter(val titel: String, val symbol: ImageVector) {
     EDITOR("Notiz", Icons.Default.Edit),
+    SERIE("Serie", Icons.Default.ContentCopy),
     MASCHINE("Maschine", Icons.Default.Tune),
-    EINSTELLUNGEN("Einstellungen", Icons.Default.Settings),
+    // "Einstellungen" passte bei drei Reitern, bricht mit dem vierten aber um und laeuft aus
+    // dem Bild. "Optionen" ist genauso lang wie "Maschine", das sauber passt.
+    EINSTELLUNGEN("Optionen", Icons.Default.Settings),
 }
 
 @Composable
@@ -69,6 +74,7 @@ fun WriteApp(viewModel: PlotterViewModel = viewModel()) {
         val machine by viewModel.machine.collectAsStateWithLifecycle()
         val notizen by viewModel.notizen.collectAsStateWithLifecycle()
         val aktuelleNotizId by viewModel.aktuelleNotizId.collectAsStateWithLifecycle()
+        val serie by viewModel.serie.collectAsStateWithLifecycle()
 
         // Bildschirm anlassen, solange ein Auftrag laeuft. Das ist die wirksamste Massnahme
         // gegen abbrechende Verbindungen: bei wachem Bildschirm drosselt Android das WLAN
@@ -121,6 +127,26 @@ fun WriteApp(viewModel: PlotterViewModel = viewModel()) {
                     onNotizOeffnen = viewModel::notizOeffnen,
                     onNotizAnlegen = viewModel::notizAnlegen,
                     onNotizLoeschen = viewModel::notizLoeschen,
+                    modifier = Modifier.padding(innerPadding),
+                )
+
+                Reiter.SERIE -> SerieScreen(
+                    serie = serie,
+                    machine = machine,
+                    onVorlageOeffnen = viewModel::vorlageOeffnen,
+                    onVorlageAnlegen = viewModel::vorlageAnlegen,
+                    onVorlageLoeschen = viewModel::vorlageLoeschen,
+                    onNameChange = viewModel::vorlageNameGeaendert,
+                    onTextChange = viewModel::vorlageTextGeaendert,
+                    onWerteChange = viewModel::werteGeaendert,
+                    onSettingsChange = viewModel::serieSettingsAendern,
+                    onSettingsChangeLive = viewModel::serieSettingsLive,
+                    onSettingsCommit = viewModel::serieSettingsCommit,
+                    onStarten = viewModel::serieStarten,
+                    onWeiter = viewModel::serieWeiter,
+                    onUeberspringen = viewModel::serieUeberspringen,
+                    onAbbrechen = viewModel::serieAbbrechen,
+                    onBeenden = viewModel::serieBeenden,
                     modifier = Modifier.padding(innerPadding),
                 )
 

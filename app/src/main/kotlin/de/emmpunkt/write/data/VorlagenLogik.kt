@@ -17,8 +17,14 @@ const val FELD_TRENNER = ';'
  * Benannt und nicht durchnummeriert: Wer die Vorlage nach Monaten wieder oeffnet, liest
  * `{anrede} {name}` und weiss sofort, welche Spalte was ist. Bei `{1} {2}` muesste er die
  * Werteliste danebenlegen und abzaehlen.
+ *
+ * BEIDE geschweiften Klammern sind maskiert, und der Bindestrich ebenfalls. Java sieht das
+ * lockerer, Android benutzt aber ICU: Dort warf `}` unmaskiert eine PatternSyntaxException,
+ * und zwar erst beim ersten Zugriff auf diese Datei - die Tests auf dem PC blieben gruen,
+ * die App stuerzte am Geraet ab. Regex-Feinheiten gehoeren deshalb ans Geraet, nicht nur in
+ * den Unit-Test.
  */
-private val PLATZHALTER = Regex("""\{([\p{L}\p{N}_-]+)}""")
+private val PLATZHALTER = Regex("""\{([\p{L}\p{N}_\-]+)\}""")
 
 /** Eine Zeile der Werteliste - ein Bogen. */
 data class WerteZeile(
