@@ -110,47 +110,46 @@ fun EditorScreen(
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         ) {
             Column {
+                // Der Ansichtsschalter steht ueber dem Bild und nicht daneben: unter der
+                // Vorschau teilte er sich die Zeile mit den Kennzahlen, die mit der Textmenge
+                // waechst - eins von beidem brach dann immer um. Als Overlay in der Bildecke
+                // ginge es auch nicht, weil das Blatt je nach Format bis an den Rand reicht.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, end = 12.dp, top = 4.dp),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    FilterChip(
+                        selected = showTravel,
+                        onClick = { showTravel = !showTravel },
+                        label = { Text("Leerfahrten", maxLines = 1, softWrap = false) },
+                    )
+                }
                 PreviewCanvas(
                     strokes = document.laidOut?.strokes.orEmpty(),
                     frame = settings.toFrame(),
                     modifier = Modifier.height(200.dp),
                     showTravel = showTravel,
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = document.job?.let { job ->
-                            val zeit = job.estimatedSeconds.roundToInt()
-                            // Kompakt halten: die Zeile teilt sich den Platz mit dem Schalter,
-                            // und "1 min 8 s" trieb sie in den Umbruch.
-                            val dauer = if (zeit >= 60) {
-                                "%d:%02d".format(Locale.GERMANY, zeit / 60, zeit % 60)
-                            } else {
-                                "$zeit s"
-                            }
-                            "%.0f mm · %d Hübe · ca. %s".format(
-                                Locale.GERMANY, job.drawLengthMm, job.penDownCount, dauer,
-                            )
-                        } ?: "Noch kein Text",
-                        style = MaterialTheme.typography.bodySmall,
-                        // Der Kennzahlentext wird mit der Textmenge laenger. Ohne weight()
-                        // nimmt er dem Schalter rechts den Platz, bis dessen Beschriftung
-                        // umbricht - am Geraet aufgefallen.
-                        modifier = Modifier.weight(1f),
-                    )
-                    FilterChip(
-                        selected = showTravel,
-                        onClick = { showTravel = !showTravel },
-                        label = {
-                            // Eine Zeile, nie umbrechend: der Schalter behaelt seine Groesse,
-                            // egal wie lang die Kennzahlen daneben werden.
-                            Text("Leerfahrten", maxLines = 1, softWrap = false)
-                        },
-                    )
-                }
+                Text(
+                    text = document.job?.let { job ->
+                        val zeit = job.estimatedSeconds.roundToInt()
+                        val dauer = if (zeit >= 60) {
+                            "%d:%02d".format(Locale.GERMANY, zeit / 60, zeit % 60)
+                        } else {
+                            "$zeit s"
+                        }
+                        "%.0f mm · %d Hübe · ca. %s".format(
+                            Locale.GERMANY, job.drawLengthMm, job.penDownCount, dauer,
+                        )
+                    } ?: "Noch kein Text",
+                    style = MaterialTheme.typography.bodySmall,
+                    // Volle Breite, seit der Schalter nicht mehr daneben sitzt.
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                )
             }
         }
 
