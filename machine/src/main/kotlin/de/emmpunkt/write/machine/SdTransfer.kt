@@ -68,6 +68,19 @@ class HttpSdTransfer(
             }
             // Antwort leeren, damit die Verbindung wiederverwendbar bleibt.
             runCatching { connection.inputStream.use { it.readBytes() } }
+        } catch (e: IOException) {
+            // Android blockiert Klartext-Verkehr ueber seine HTTP-Stacks seit API 28. Die
+            // Meldung des Systems nennt zwar die Ursache, klingt aber nach einem Netzfehler -
+            // am Geraet ist genau das passiert. Hier wird gesagt, was zu tun ist.
+            if (e.message?.contains("Cleartext", ignoreCase = true) == true) {
+                throw IOException(
+                    "Android hat die unverschluesselte Verbindung zu $host blockiert. " +
+                        "Der App fehlt die Freigabe fuer Klartext-Verkehr " +
+                        "(res/xml/network_security_config.xml).",
+                    e,
+                )
+            }
+            throw e
         } finally {
             connection.disconnect()
         }
