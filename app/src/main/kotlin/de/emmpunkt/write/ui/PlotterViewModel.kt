@@ -13,14 +13,29 @@ import de.emmpunkt.write.core.layout.fitSize
 import de.emmpunkt.write.core.layout.layoutText
 import java.util.Locale
 import de.emmpunkt.write.data.AppSettings
+import de.emmpunkt.write.data.BogenBefund
 import de.emmpunkt.write.data.NoteDatabase
 import de.emmpunkt.write.data.NoteEntity
 import de.emmpunkt.write.data.NoteRepository
 import de.emmpunkt.write.data.PlotWakeLock
+import de.emmpunkt.write.data.SerienZustand
+import de.emmpunkt.write.data.Serienlauf
 import de.emmpunkt.write.data.SettingsRepository
+import de.emmpunkt.write.data.TemplateEntity
+import de.emmpunkt.write.data.TemplateRepository
+import de.emmpunkt.write.data.WerteZeile
+import de.emmpunkt.write.data.einsetzen
 import de.emmpunkt.write.data.mitNotiz
+import de.emmpunkt.write.data.mitVorlage
 import de.emmpunkt.write.data.neueNotiz
+import de.emmpunkt.write.data.neueVorlage
+import de.emmpunkt.write.data.platzhalterIn
+import de.emmpunkt.write.data.pruefeBogen
+import de.emmpunkt.write.data.rahmenFehler
+import de.emmpunkt.write.data.vorlagenFehler
+import de.emmpunkt.write.data.werteZeilen
 import de.emmpunkt.write.data.zuNotiz
+import de.emmpunkt.write.data.zuVorlage
 import de.emmpunkt.write.machine.Axis
 import de.emmpunkt.write.machine.HttpSdTransfer
 import de.emmpunkt.write.machine.MachineController
@@ -70,11 +85,59 @@ data class MachineUiState(
     val sdLauf: Boolean = false,
 )
 
+/**
+ * Alles, was der Serie-Reiter anzeigt.
+ *
+ * Bewusst EIN Zustand statt eines Dutzends einzelner Fluesse: Die Felder haengen voneinander ab
+ * - aus dem Vorlagentext folgen die Spalten, daraus die Zeilen, daraus die Befunde. Getrennte
+ * Fluesse koennten fuer einen Moment zueinander unpassende Staende zeigen.
+ */
+data class SerieUiState(
+    val vorlagen: List<TemplateEntity> = emptyList(),
+    val aktuelleId: Long = 0L,
+    val name: String = "",
+    val text: String = "",
+    val werte: String = "",
+    /** Arbeitszustand der Vorlage - getrennt vom Editor, damit sich beide nicht stoeren. */
+    val settings: AppSettings = AppSettings(),
+    val spalten: List<String> = emptyList(),
+    val zeilen: List<WerteZeile> = emptyList(),
+    val befunde: List<BogenBefund> = emptyList(),
+    /**
+     * Der erste brauchbare Bogen, fertig gesetzt - fuer die Vorschau.
+     *
+     * Der Satz entsteht hier und nicht im Bildschirm: `PreviewCanvas` zeichnet fertige
+     * Strichzuege, und Layout-Arbeit gehoert nicht in eine Compose-Funktion, die bei jeder
+     * Neuzeichnung laeuft.
+     */
+    val vorschau: LaidOutText? = null,
+    /** Vorlagenfehler oder unmoeglicher Rahmen - beides sperrt den Start. */
+    val fehler: String? = null,
+    val lauf: SerienZustand? = null,
+) {
+    val bogenGesamt: Int get() = zeilen.count { it.fehler == null }
+
+    val startbar: Boolean
+        get() = fehler == null &&
+            bogenGesamt > 0 &&
+            zeilen.all { it.fehler == null } &&
+            befunde.all { it.inOrdnung } &&
+            lauf == null
+}
+
 class PlotterViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repository = SettingsRepository(app)
     private val wakeLock = PlotWakeLock(app)
     private val notes = NoteRepository(NoteDatabase.dao(app))
+    private val templates = TemplateRepository(NoteDatabase.templateDao(app))
+
+    private val _serie = MutableStateFlow(SerieUiState())
+    val serie: StateFlow<SerieUiState> = _serie.asStateFlow()
+
+    private var serienlauf: Serienlauf? = null
+    private var serienAuftrag: Job? = null
+    private var vorlageSpeichern: Job? = null
 
     val notizen: StateFlow<List<NoteEntity>> = notes.notizen
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -135,6 +198,13 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
                 offeneId = loaded.offeneNotizId,
             )
             uebernehmen(notiz)
+
+            // Die Vorlagenliste laeuft mit; ohne Vorlage bleibt der Reiter leer, das ist
+            // gueltig. Als eigener Auftrag, weil der Sammler nie zurueckkehrt.
+            launch {
+                templates.vorlagen.collect { liste -> _serie.update { it.copy(vorlagen = liste) } }
+            }
+            templates.zuletztBearbeiteteOderNull()?.let { vorlageUebernehmen(it) }
         }
     }
 
@@ -308,6 +378,163 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
                     notes.zuletztBearbeiteteOderNull()?.let { uebernehmen(it) }
             }
         }
+    }
+
+    // ---- Vorlagen ----
+
+    /** Legt eine geladene Vorlage in den Serie-Arbeitszustand. */
+    private fun vorlageUebernehmen(v: TemplateEntity) {
+        _serie.update {
+            it.copy(
+                aktuelleId = v.id,
+                name = v.name,
+                text = v.text,
+                werte = v.werte,
+                // Basis sind die aktuellen Einstellungen: Verbindung, Vorschuebe und
+                // Papier-Offset kommen von dort, Schriftbild und Blatt aus der Vorlage.
+                settings = _settings.value.mitVorlage(v),
+                lauf = null,
+            )
+        }
+        serieNeuRechnen()
+    }
+
+    /**
+     * Rechnet Spalten, Zeilen, Befunde und Vorschau neu.
+     *
+     * Laeuft nach jeder Aenderung an Text, Werten oder Schriftbild. Bei wenigen Dutzend Bogen
+     * ist das eine Sache von Millisekunden; erst bei Hunderten waere ein Aufschub noetig.
+     */
+    private fun serieNeuRechnen() {
+        val s = _serie.value
+        val spalten = platzhalterIn(s.text)
+        val zeilen = werteZeilen(s.werte, spalten)
+
+        val fehler = vorlagenFehler(s.text) ?: rahmenFehler(s.settings)
+        val brauchbare = zeilen.filter { it.fehler == null }
+
+        val befunde = if (fehler != null) {
+            emptyList()
+        } else {
+            runCatching {
+                pruefeBogen(
+                    zeilen = brauchbare,
+                    vorlage = s.text,
+                    style = s.settings.toTextStyle(),
+                    frame = s.settings.toFrame(),
+                    font = Fonts.load(s.settings.fontId),
+                )
+            }.getOrDefault(emptyList())
+        }
+
+        val vorschau = if (fehler != null) {
+            null
+        } else {
+            brauchbare.firstOrNull()?.let { erste ->
+                runCatching {
+                    layoutText(
+                        einsetzen(s.text, erste.felder),
+                        s.settings.toTextStyle(),
+                        s.settings.toFrame(),
+                        Fonts.load(s.settings.fontId),
+                    )
+                }.getOrNull()
+            }
+        }
+
+        _serie.update {
+            it.copy(
+                spalten = spalten,
+                zeilen = zeilen,
+                befunde = befunde,
+                vorschau = vorschau,
+                fehler = fehler,
+            )
+        }
+    }
+
+    fun vorlageOeffnen(id: Long) {
+        if (_machine.value.busy || _serie.value.lauf != null) return
+        viewModelScope.launch {
+            vorlageSofortSpeichern()
+            templates.laden(id)?.let { vorlageUebernehmen(it) }
+        }
+    }
+
+    fun vorlageAnlegen() {
+        if (_machine.value.busy || _serie.value.lauf != null) return
+        viewModelScope.launch {
+            vorlageSofortSpeichern()
+            val id = templates.speichern(neueVorlage(_settings.value, System.currentTimeMillis()))
+            templates.laden(id)?.let { vorlageUebernehmen(it) }
+        }
+    }
+
+    fun vorlageLoeschen(id: Long) {
+        if (_machine.value.busy || _serie.value.lauf != null) return
+        viewModelScope.launch {
+            templates.loeschen(id)
+            if (id == _serie.value.aktuelleId) {
+                // Auf die naechstbeste umschalten - oder auf den leeren Zustand.
+                val ersatz = templates.zuletztBearbeiteteOderNull()
+                if (ersatz != null) {
+                    vorlageUebernehmen(ersatz)
+                } else {
+                    _serie.value = SerieUiState(vorlagen = _serie.value.vorlagen)
+                }
+            }
+        }
+    }
+
+    fun vorlageNameGeaendert(v: String) = serieFeldGeaendert { it.copy(name = v) }
+
+    fun vorlageTextGeaendert(v: String) = serieFeldGeaendert { it.copy(text = v) }
+
+    fun werteGeaendert(v: String) = serieFeldGeaendert { it.copy(werte = v) }
+
+    fun serieSettingsAendern(transform: (AppSettings) -> AppSettings) =
+        serieFeldGeaendert { it.copy(settings = transform(it.settings)) }
+
+    /** Waehrend eines Reglerzugs: rechnen, aber nicht speichern - wie im Editor. */
+    fun serieSettingsLive(transform: (AppSettings) -> AppSettings) {
+        _serie.update { it.copy(settings = transform(it.settings)) }
+        serieNeuRechnen()
+    }
+
+    fun serieSettingsCommit() = vorlageVerzoegertSpeichern()
+
+    private fun serieFeldGeaendert(transform: (SerieUiState) -> SerieUiState) {
+        _serie.update(transform)
+        serieNeuRechnen()
+        vorlageVerzoegertSpeichern()
+    }
+
+    private fun vorlageVerzoegertSpeichern() {
+        vorlageSpeichern?.cancel()
+        vorlageSpeichern = viewModelScope.launch {
+            delay(SPEICHER_VERZOEGERUNG_MS)
+            vorlageSchreiben()
+        }
+    }
+
+    private suspend fun vorlageSofortSpeichern() {
+        vorlageSpeichern?.cancel()
+        vorlageSchreiben()
+    }
+
+    private suspend fun vorlageSchreiben() {
+        val s = _serie.value
+        // id 0 heisst: noch keine Vorlage offen. Speichern legte sonst versehentlich eine an.
+        if (s.aktuelleId == 0L) return
+        templates.speichern(
+            s.settings.zuVorlage(
+                id = s.aktuelleId,
+                name = s.name,
+                text = s.text,
+                werte = s.werte,
+                jetzt = System.currentTimeMillis(),
+            ),
+        )
     }
 
     // ---- Maschine ----
@@ -523,6 +750,115 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
             }
             syncController()
         }
+    }
+
+    // ---- Serienlauf ----
+
+    /**
+     * Plottet einen einzelnen Bogen und kehrt erst zurueck, wenn er durch ist.
+     *
+     * Bewusst dieselbe Kette wie ein einzelner Auftrag: Der [MachineController] prueft Grenzen,
+     * Homing und Idle-Zustand, und der Auftrag endet mit der Rueckfahrt auf den Nullpunkt.
+     * Ein zweiter Sendeweg mit eigener Sicherheitslogik waere genau die Abkuerzung, die
+     * spaeter ein Blatt kostet.
+     */
+    private suspend fun serienBogenPlotten(
+        text: String,
+        s: AppSettings,
+        ueberSdKarte: Boolean,
+    ): Result<Unit> {
+        val c = controller ?: return Result.failure(IllegalStateException("Nicht verbunden."))
+
+        val laid = runCatching {
+            layoutText(text, s.toTextStyle(), s.toFrame(), Fonts.load(s.fontId))
+        }.getOrElse { return Result.failure(it) }
+
+        val job = laid.toPlotJob(s.toMachineProfile().applying(maschinenwerte))
+        if (job.penDownCount == 0) {
+            return Result.failure(IllegalStateException("Der Bogen enthält nichts zu zeichnen."))
+        }
+
+        val fluss = if (ueberSdKarte) {
+            c.plotViaSd(job, laid.strokes, sdTransfer())
+        } else {
+            c.plot(job, laid.strokes)
+        }
+
+        var fehler: String? = null
+        fluss.collect { fortschritt ->
+            _machine.update {
+                it.copy(
+                    progress = fortschritt,
+                    busy = fortschritt is SendProgress.Started ||
+                        fortschritt is SendProgress.Running,
+                    sdLauf = ueberSdKarte,
+                )
+            }
+            when (fortschritt) {
+                is SendProgress.Failed -> fehler = fortschritt.message +
+                    if (fortschritt.penLifted) "" else " ACHTUNG: Stift nicht angehoben."
+                is SendProgress.Aborted -> fehler = "Abgebrochen"
+                else -> Unit
+            }
+        }
+        syncController()
+
+        return fehler?.let { Result.failure(IllegalStateException(it)) } ?: Result.success(Unit)
+    }
+
+    fun serieStarten(ueberSdKarte: Boolean) {
+        val s = _serie.value
+        if (!s.startbar) return
+        if (controller == null) {
+            _machine.update { it.copy(message = "Nicht verbunden.") }
+            return
+        }
+
+        val texte = s.zeilen.filter { it.fehler == null }.map { einsetzen(s.text, it.felder) }
+        val lauf = Serienlauf(
+            bogen = texte,
+            plotteBogen = { _, text -> serienBogenPlotten(text, s.settings, ueberSdKarte) },
+        )
+        serienlauf = lauf
+
+        viewModelScope.launch {
+            lauf.zustand.collect { zustand ->
+                _serie.update { it.copy(lauf = zustand) }
+                // Zwischen zwei Karten liegt eine Wartezeit, in der das Telefon sonst
+                // einschliefe und die Verbindung verloere - die Sperre gilt fuer den ganzen
+                // Satz, nicht je Bogen.
+                if (zustand is SerienZustand.Fertig || zustand is SerienZustand.Abgebrochen) {
+                    wakeLock.release()
+                }
+            }
+        }
+
+        wakeLock.acquire()
+        serieWeiter()
+    }
+
+    fun serieWeiter() {
+        val lauf = serienlauf ?: return
+        serienAuftrag = viewModelScope.launch { lauf.naechsterBogen() }
+    }
+
+    fun serieUeberspringen() {
+        serienlauf?.ueberspringen()
+    }
+
+    fun serieAbbrechen() {
+        serienAuftrag?.cancel()
+        serienlauf?.abbrechen()
+        serienlauf = null
+        wakeLock.release()
+        // Der Stift steht womoeglich noch auf dem Papier.
+        emergencyStop()
+    }
+
+    /** Schliesst einen fertigen oder abgebrochenen Satz ab, damit der Reiter wieder frei ist. */
+    fun serieBeenden() {
+        serienlauf = null
+        _serie.update { it.copy(lauf = null) }
     }
 
     fun cancelPlot() {
