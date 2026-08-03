@@ -13,8 +13,14 @@ import de.emmpunkt.write.core.layout.fitSize
 import de.emmpunkt.write.core.layout.layoutText
 import java.util.Locale
 import de.emmpunkt.write.data.AppSettings
+import de.emmpunkt.write.data.NoteDatabase
+import de.emmpunkt.write.data.NoteEntity
+import de.emmpunkt.write.data.NoteRepository
 import de.emmpunkt.write.data.PlotWakeLock
 import de.emmpunkt.write.data.SettingsRepository
+import de.emmpunkt.write.data.mitNotiz
+import de.emmpunkt.write.data.neueNotiz
+import de.emmpunkt.write.data.zuNotiz
 import de.emmpunkt.write.machine.Axis
 import de.emmpunkt.write.machine.HttpSdTransfer
 import de.emmpunkt.write.machine.MachineController
@@ -27,9 +33,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -66,6 +74,20 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repository = SettingsRepository(app)
     private val wakeLock = PlotWakeLock(app)
+    private val notes = NoteRepository(NoteDatabase.dao(app))
+
+    val notizen: StateFlow<List<NoteEntity>> = notes.notizen
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _aktuelleNotizId = MutableStateFlow(0L)
+    val aktuelleNotizId: StateFlow<Long> = _aktuelleNotizId.asStateFlow()
+
+    /**
+     * Laeuft, bis der Nutzer eine Weile nicht mehr tippt.
+     *
+     * Ohne diese Verzoegerung loeste jeder Tastendruck eine Schreibtransaktion aus.
+     */
+    private var speicherAuftrag: Job? = null
 
     private val _settings = MutableStateFlow(AppSettings())
     val settings: StateFlow<AppSettings> = _settings.asStateFlow()
@@ -103,9 +125,24 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val loaded = repository.settings.first()
             _settings.value = loaded
-            _text.value = loaded.lastText
-            recompute()
+            // Der Text kommt ab jetzt aus der Notiztabelle. `lastText` ist nur noch die Quelle
+            // fuer die einmalige Umstellung und wird bewusst nicht mehr fortgeschrieben -
+            // waere die Umstellung schiefgegangen, laege der alte Text sonst nirgends mehr.
+            val notiz = notes.sicherstellenDassEineDaIst(
+                lastText = loaded.lastText,
+                vorgabe = loaded,
+                jetzt = System.currentTimeMillis(),
+            )
+            uebernehmen(notiz)
         }
+    }
+
+    /** Legt eine geladene Notiz in den Arbeitszustand: Text und Schriftbild. */
+    private fun uebernehmen(notiz: NoteEntity) {
+        _aktuelleNotizId.value = notiz.id
+        _text.value = notiz.text
+        _settings.value = _settings.value.mitNotiz(notiz)
+        recompute()
     }
 
     fun onTextChanged(value: String) {
@@ -202,9 +239,70 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Schreibt den Arbeitszustand in die aktuelle Notiz - verzoegert.
+     *
+     * Die Einstellungen wandern weiterhin in den DataStore: ihre Stilwerte sind ab jetzt die
+     * Vorlage fuer die naechste neue Notiz.
+     */
     private fun persist() {
+        speicherAuftrag?.cancel()
+        speicherAuftrag = viewModelScope.launch {
+            delay(SPEICHER_VERZOEGERUNG_MS)
+            schreiben()
+        }
+    }
+
+    /** Schreibt sofort statt verzoegert - vor jedem Notizwechsel noetig. */
+    private suspend fun sofortSpeichern() {
+        speicherAuftrag?.cancel()
+        schreiben()
+    }
+
+    private suspend fun schreiben() {
+        val s = _settings.value
+        repository.update(s)
+        val id = _aktuelleNotizId.value
+        // id 0 heisst: die Startnotiz steht noch nicht. Bis dahin gaebe es nichts zu
+        // beschreiben, und ein Speichern legte versehentlich eine zweite Notiz an.
+        if (id != 0L) {
+            notes.speichern(s.zuNotiz(id, _text.value, System.currentTimeMillis()))
+        }
+    }
+
+    // ---- Notizen ----
+
+    fun notizOeffnen(id: Long) {
+        if (_machine.value.busy) return
         viewModelScope.launch {
-            repository.update(_settings.value.copy(lastText = _text.value))
+            // Erst den offenen Stand sichern, sonst geht das zuletzt Getippte verloren.
+            sofortSpeichern()
+            notes.laden(id)?.let { uebernehmen(it) }
+        }
+    }
+
+    fun notizAnlegen() {
+        if (_machine.value.busy) return
+        viewModelScope.launch {
+            sofortSpeichern()
+            val jetzt = System.currentTimeMillis()
+            val vorlage = notes.laden(_aktuelleNotizId.value)
+            val id = notes.speichern(neueNotiz(vorlage, _settings.value, jetzt))
+            notes.laden(id)?.let { uebernehmen(it) }
+        }
+    }
+
+    fun notizLoeschen(id: Long) {
+        if (_machine.value.busy) return
+        viewModelScope.launch {
+            val geleert = notes.loeschenOderLeeren(id, System.currentTimeMillis())
+            when {
+                // War es die letzte, bleibt sie offen - nur eben leer.
+                geleert != null -> uebernehmen(geleert)
+                // Die offene Notiz ist weg: auf die naechstbeste umschalten.
+                id == _aktuelleNotizId.value ->
+                    notes.zuletztBearbeiteteOderNull()?.let { uebernehmen(it) }
+            }
         }
     }
 
@@ -443,6 +541,9 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
     private companion object {
         /** Schnell genug, um beim Fahren mitzulaufen, langsam genug fuer die Verbindung. */
         const val STATUS_POLL_MS = 600L
+
+        /** Wartezeit nach der letzten Aenderung, bevor gespeichert wird. */
+        const val SPEICHER_VERZOEGERUNG_MS = 500L
     }
 
     private fun observeController(c: MachineController) {
