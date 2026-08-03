@@ -274,15 +274,24 @@ private fun SerieLauf(
                     Text("Abbrechen")
                 }
 
-            else -> Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Button(onClick = onWeiter, modifier = Modifier.weight(1f)) {
+            // Der wichtigste Knopf bekommt eine eigene Zeile. Zu dritt nebeneinander wurde er
+            // am Geraet auf eine senkrechte Buchstabensaeule zusammengequetscht - "Nächster
+            // Bogen" ist zu lang, um sich den Platz mit zwei weiteren zu teilen.
+            else -> {
+                Button(onClick = onWeiter, modifier = Modifier.fillMaxWidth()) {
                     Text(if (lauf is SerienZustand.Fehlgeschlagen) "Nochmal" else "Nächster Bogen")
                 }
-                OutlinedButton(onClick = onUeberspringen) { Text("Überspringen") }
-                OutlinedButton(onClick = onAbbrechen) { Text("Stopp") }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(onClick = onUeberspringen, modifier = Modifier.weight(1f)) {
+                        Text("Überspringen")
+                    }
+                    OutlinedButton(onClick = onAbbrechen, modifier = Modifier.weight(1f)) {
+                        Text("Stopp")
+                    }
+                }
             }
         }
     }
