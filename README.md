@@ -384,4 +384,6 @@ Noch offen:
   Grenzprüfung fängt es ab, statt es in den Alarm laufen zu lassen.
 - Die Zeitschätzung liegt weiterhin zu niedrig, nur weniger als vorher – siehe „Wie lange
   dauert das?".
-- Die Schrift „Allure" steht zur Entscheidung: überarbeiten, behalten oder entfernen.
+- Die Zeitschätzung fällt bei den SVG-Kursiven zu hoch aus (gemessen 2026-08-03: geschätzt
+  59 s, real 30–45 s). Vom Nutzer zurückgestellt — gehört mit einer Messreihe über mehrere
+  Schriften und Textlängen sauber vermessen, nicht nachjustiert.

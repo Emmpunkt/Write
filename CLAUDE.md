@@ -277,11 +277,9 @@ Fälle, ein Test der den Stift aufsetzt darf nicht versehentlich mitlaufen.
 
 ## Bekannte offene Punkte
 
-- **Die Schrift „Allure" gefällt dem Nutzer nicht** (Rückmeldung 2026-08-02, nach dem echten
-  Bogen). Sie ist zu überarbeiten oder ganz zu entfernen. Ausdrücklich **etwas für später** –
-  nicht ungefragt anfangen. Beim Entfernen: `Fonts.kt`, die SVG-Datei unter
-  `core/src/main/resources/fonts/`, die Nennung im README; gespeicherte `fontId`s laufen über
-  den vorhandenen Rückfall in `Fonts.entry` auf die Vorgabe, es bricht also nichts.
+- ~~Die Schrift „Allure" gefällt dem Nutzer nicht~~ **Erledigt (2026-08-03): Allure bleibt.**
+  Entscheidung des Nutzers nach dem zweiten Bogen: „wenn man nicht zu groß schreibt, sieht es
+  OK aus." Kein Umbau, kein Entfernen.
 - ~~Untergrenze der Achsen~~ und ~~Zeitschätzung~~ sind am 2026-08-03 gebaut, aber noch nicht
   an der Maschine geprüft. Siehe den Stand-Abschnitt oben.
 - Keine automatische Silbentrennung (bewusst): Sie bräuchte Sprachwissen und läge bei
