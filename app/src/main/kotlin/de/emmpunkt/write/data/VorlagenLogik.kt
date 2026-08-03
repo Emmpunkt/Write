@@ -1,5 +1,7 @@
 package de.emmpunkt.write.data
 
+import de.emmpunkt.write.core.layout.Align
+
 /**
  * Trennzeichen der Werteliste.
  *
@@ -88,3 +90,73 @@ fun werteZeilen(eingabe: String, spalten: List<String>): List<WerteZeile> {
  */
 fun einsetzen(text: String, werte: Map<String, String>): String =
     PLATZHALTER.replace(text) { treffer -> werte[treffer.groupValues[1]] ?: treffer.value }
+
+/** Beispieltext einer frisch angelegten Vorlage. */
+private const val VORLAGE_BEISPIEL = "{anrede} {name},"
+
+/**
+ * Die Ausrichtung als Enum.
+ *
+ * Wie bei der Notiz: ein unbekannter Name in der Datenbank fuehrt zur Vorgabe, nicht zum
+ * Absturz beim Oeffnen einer alten Vorlage.
+ */
+fun TemplateEntity.alignEnum(): Align =
+    runCatching { Align.valueOf(align) }.getOrElse { AppSettings().align }
+
+/**
+ * Legt Schriftbild UND Blattformat der Vorlage ueber die Einstellungen.
+ *
+ * Papier-Offset, Maschine und Verbindung bleiben unberuehrt - sie beschreiben die Einrichtung,
+ * nicht das Dokument.
+ */
+fun AppSettings.mitVorlage(v: TemplateEntity): AppSettings = copy(
+    fontId = v.fontId,
+    sizeMm = v.sizeMm,
+    align = v.alignEnum(),
+    lineSpacing = v.lineSpacing,
+    letterSpacing = v.letterSpacing,
+    wordSpacing = v.wordSpacing,
+    slantDeg = v.slantDeg,
+    paperWidthMm = v.paperWidthMm,
+    paperHeightMm = v.paperHeightMm,
+    marginMm = v.marginMm,
+)
+
+/** Der umgekehrte Weg: aus dem Arbeitszustand wird wieder eine Vorlage zum Speichern. */
+fun AppSettings.zuVorlage(
+    id: Long,
+    name: String,
+    text: String,
+    werte: String,
+    jetzt: Long,
+) = TemplateEntity(
+    id = id,
+    name = name,
+    text = text,
+    werte = werte,
+    updatedAt = jetzt,
+    fontId = fontId,
+    sizeMm = sizeMm,
+    align = align.name,
+    lineSpacing = lineSpacing,
+    letterSpacing = letterSpacing,
+    wordSpacing = wordSpacing,
+    slantDeg = slantDeg,
+    paperWidthMm = paperWidthMm,
+    paperHeightMm = paperHeightMm,
+    marginMm = marginMm,
+)
+
+/**
+ * Eine neue, leere Vorlage mit den aktuellen Einstellungen als Ausgangspunkt.
+ *
+ * Der Beispieltext ist Absicht: Mit leerem Feld begruesste die App den Nutzer sonst mit
+ * "enthält keinen Platzhalter", ohne zu zeigen, wie einer aussieht.
+ */
+fun neueVorlage(vorgabe: AppSettings, jetzt: Long): TemplateEntity = vorgabe.zuVorlage(
+    id = 0L,
+    name = "Neue Vorlage",
+    text = VORLAGE_BEISPIEL,
+    werte = "",
+    jetzt = jetzt,
+)
