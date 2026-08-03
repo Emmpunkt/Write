@@ -223,6 +223,23 @@ den Dateitransfer. OkHttp muss dafür zurück ins `machine`-Modul.
 Fortschrittsanzeige ist das `SD`-Feld im normalen `?`-Statusbericht zu prüfen – das geht nur
 während eines echten Laufs.
 
+### Teil 2 steht: Notizliste (2026-08-03)
+
+Room speichert `NoteEntity` (Text + Schriftbild), das DAO liegt hinter einem eigenen
+Interface, damit alles ohne Emulator prüfbar bleibt – dasselbe Muster wie `FakeFluidNc`.
+Die gesamte Logik (Titel, Umwandlung, Erben) sitzt in reinen Funktionen in `NoteLogik.kt`.
+
+Festgelegt vom Nutzer: **Blattformat, Rand und Papier-Offset gehören NICHT zur Notiz**,
+sondern gelten global – das Papier liegt auf dem Tisch, nicht im Dokument. Ein abweichendes
+Format darf erst bei den **Vorlagen (Teil 3)** mitkommen; das ist der richtige Ort dafür,
+weil eine Grußkarte ihr Format mitbringt, eine Notiz aber nicht.
+
+**Am Gerät gefundener Fehler, den kein Test zeigen konnte:** Die App öffnete nach einem
+Neustart eine andere Notiz als die zuletzt sichtbare. Die offene Notiz war aus den
+Zeitstempeln erschlossen – beim Wechseln wird aber die *verlassene* Notiz gespeichert und
+trägt danach die neuere Zeit. Sie wird jetzt gemerkt (`offeneNotizId` in den Einstellungen).
+Merksatz: „zuletzt bearbeitet" ist nicht „zuletzt angesehen".
+
 Entwurfsentscheidung (2026-08-03): **zwei getrennte Knöpfe** – „Auf SD senden" und „Direkt
 senden". Beide durchlaufen dasselbe `preflight`; der SD-Weg bekommt keine zweite
 Sicherheitslogik.

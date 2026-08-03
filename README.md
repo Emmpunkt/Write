@@ -23,7 +23,7 @@ zweite Darstellung. Was auf dem Bildschirm steht, fährt der Stift.
 ## Bauen und installieren
 
 ```bash
-./gradlew test                 # 172 Tests, ohne Netz und ohne Gerät
+./gradlew test                 # 195 Tests, ohne Netz und ohne Gerät
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
@@ -230,6 +230,28 @@ rekonstruierbar sind. Junction Deviation bleibt weiterhin außen vor: `rampSecon
 der Planer fahre einen Strichzug ohne Zwischenstopp durch, während FluidNC an scharfen Ecken
 abbremst — bei einem langen Text dürfte die Schätzung deshalb wieder zu knapp werden.
 
+## Notizen
+
+Mehrere Notizen liegen dauerhaft in einer Room-Datenbank. Die Liste klappt über dem Textfeld
+auf; angetippt wird umgeschaltet, „+ Neu" legt an, das Papierkorb-Symbol löscht nach Rückfrage.
+
+**Jede Notiz trägt ihr eigenes Schriftbild** — Schriftart, Größe, Ausrichtung, Zeilen-, Zeichen-
+und Wortabstand, Neigung. Beim Umschalten kommt es mit. Eine neue Notiz erbt es von der zuletzt
+offenen: wer eine Einkaufsliste in 5 mm schreibt, schreibt die nächste meist genauso.
+
+**Blattformat, Rand und Papier-Offset gelten dagegen global.** Sie beschreiben, was auf dem
+Tisch liegt, nicht wie die Notiz aussieht. Ein Notizwechsel darf das eingelegte Papier nicht
+„ändern" — sonst plottete man auf einen Bogen, der gar nicht drunterliegt. Ein abweichendes
+Format gehört zu den Vorlagen (Teil 3), nicht zur Notiz.
+
+Der **Titel ist die erste nicht-leere Zeile**, abgeleitet statt gespeichert: ein eigenes Feld
+wäre ein zweiter Ort für dieselbe Information und müsste beim Tippen nachgeführt werden.
+
+Zwei Regeln sitzen im Repository und nicht in der Oberfläche: Es gibt **immer mindestens eine
+Notiz**, und die **letzte wird geleert statt gelöscht**. Der Editor darf nie ohne Notiz
+dastehen. Welche Notiz offen ist, wird gemerkt und nicht aus den Zeitstempeln erschlossen —
+beim Wechseln wird die *verlassene* Notiz gespeichert und trüge danach die neuere Zeit.
+
 ## Zwei Wege zum Plotter
 
 | | **Auf SD senden** | **Direkt senden** |
@@ -340,9 +362,11 @@ endete sauber auf dem Arbeitsnullpunkt mit angehobenem Stift (2026-08-02).
 - **Etappe 2b steht:** vier verbundene SVG-Schreibschriften, Hershey-Kalligrafie entfernt.
   Am 2026-08-02 an der Maschine geschrieben.
 - **Etappe 3, Teil 1 steht:** Upload auf die SD-Karte, zwei getrennte Sendewege.
-- **Etappe 3, offen:** Notizliste, Vorlagen mit Platzhaltern, gemischte Stile je Absatz.
+- **Etappe 3, Teil 2 steht:** Notizliste mit Room, jede Notiz mit eigenem Schriftbild.
+  Am 2026-08-03 am Gerät durchgespielt.
+- **Etappe 3, offen:** Vorlagen mit Platzhaltern, gemischte Stile je Absatz.
 
-172 Tests grün, alle ohne Netz und ohne Gerät.
+195 Tests grün, alle ohne Netz und ohne Gerät.
 
 Hinweis zur Installation: Über USB brach die Übertragung reproduzierbar ab (Gerät ging
 mitten im Streamed Install offline). Über WLAN läuft sie zuverlässig:
