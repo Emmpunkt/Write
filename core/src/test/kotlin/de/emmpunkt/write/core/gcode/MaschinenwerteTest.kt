@@ -88,12 +88,15 @@ class MaschinenwerteTest {
             feedDrawMmMin = 3000,
             feedTravelMmMin = 4000,
             feedZMmMin = 5000,
+            // Muss mitwachsen: das Profil laesst keinen Eilgang unter dem Vorschub zu.
+            rapidZMmMin = 5000,
         )
         val p = zuSchnell.applying(gelesen)
 
         assertEquals(1500, p.feedDrawMmMin)
         assertEquals(1500, p.feedTravelMmMin)
         assertEquals(2000, p.feedZMmMin)
+        assertEquals(2000, p.rapidZMmMin, "Der Eilgang muss auf den Hoechstvorschub zurueck")
     }
 
     @Test

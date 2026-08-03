@@ -25,6 +25,20 @@ data class MachineProfile(
     val feedZMmMin: Int = 600,
 
     /**
+     * Hoechstvorschub der Z-Achse, mit dem das ANHEBEN laeuft.
+     *
+     * Der erzeugte G-Code senkt den Stift mit `G1 ... F{feedZMmMin}` ab - begrenzt, damit ein
+     * lose aufliegender Stift nicht auf das Papier schlaegt. Angehoben wird dagegen mit `G0`,
+     * und ein Eilgang faehrt mit dem Hoechstvorschub der Achse (\$112), nicht mit dem
+     * gesetzten Wert.
+     *
+     * Geht nur in die Zeitschaetzung ein. Wer beide Richtungen gleich rechnet, schaetzt jeden
+     * Hub zu lang - bei hunderten Huebén je Auftrag deutlich sichtbar: am Geraet gemessene
+     * 55 s standen gegen 62 s geschaetzt.
+     */
+    val rapidZMmMin: Int = 2000,
+
+    /**
      * Beschleunigung der Achsen, fuer die Zeitschaetzung.
      *
      * Ohne sie war die Schaetzung rund ein Viertel zu niedrig (gemessen 15 min statt
@@ -89,6 +103,9 @@ data class MachineProfile(
         }
         require(accelXYMmS2 > 0f && accelZMmS2 > 0f) {
             "Beschleunigungen muessen positiv sein"
+        }
+        require(rapidZMmMin >= feedZMmMin) {
+            "Der Eilgang der Z-Achse darf nicht unter ihrem gesetzten Vorschub liegen"
         }
         require(workAreaXMm > 0f && workAreaYMm > 0f) { "Arbeitsbereich muss positiv sein" }
     }

@@ -30,4 +30,10 @@ tasks.test {
     (project.findProperty("plotterHost") as String?)?.let {
         systemProperty("plotterHost", it)
     }
+    // Zusaetzlich noetig fuer den einen Test, der wirklich auf Papier schreibt:
+    //   ./gradlew :machine:test -PplotterHost=192.168.2.18 -PplotterPlot=true
+    // Getrennt, damit die rein lesenden Live-Faelle gefahrlos laufen koennen.
+    (project.findProperty("plotterPlot") as String?)?.let {
+        systemProperty("plotterPlot", it)
+    }
 }

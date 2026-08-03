@@ -61,6 +61,10 @@ fun MachineProfile.applying(limits: MachineLimits): MachineProfile {
         feedDrawMmMin = maxXY?.let { minOf(feedDrawMmMin, it) } ?: feedDrawMmMin,
         feedTravelMmMin = maxXY?.let { minOf(feedTravelMmMin, it) } ?: feedTravelMmMin,
         feedZMmMin = maxZ?.let { minOf(feedZMmMin, it) } ?: feedZMmMin,
+        // Der Eilgang IST der Hoechstvorschub der Achse - G0 fragt nicht nach dem
+        // eingestellten Wert. Die Invariante rapidZ >= feedZ haelt von selbst, weil
+        // feedZMmMin eine Zeile darueber auf denselben Wert gekappt wird.
+        rapidZMmMin = maxZ ?: rapidZMmMin,
         accelXYMmS2 = limits.accelXYMmS2 ?: accelXYMmS2,
         accelZMmS2 = limits.accelZMmS2 ?: accelZMmS2,
     )

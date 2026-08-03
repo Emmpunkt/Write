@@ -88,6 +88,10 @@ data class AppSettings(
         feedDrawMmMin = feedDrawMmMin,
         feedTravelMmMin = feedTravelMmMin,
         feedZMmMin = feedZMmMin,
+        // Der Eilgang darf nie unter dem gesetzten Z-Vorschub liegen - sonst wirft das
+        // Profil. Solange keine Maschine verbunden ist, ist der wahre Wert unbekannt; dann
+        // ist der gesetzte Vorschub die sicherste Annahme.
+        rapidZMmMin = maxOf(MachineProfile().rapidZMmMin, feedZMmMin),
         workAreaXMm = workAreaXMm,
         workAreaYMm = workAreaYMm,
         paperOffsetXMm = paperOffsetXMm,

@@ -294,8 +294,13 @@ private fun estimateSeconds(
     val zHub = abs(profile.zUpMm - profile.zDownMm)
     // Senken und Heben sind je eine eigene Bewegung aus dem Stand - kurz genug, dass die
     // Rampe hier den Grossteil der Zeit ausmacht.
-    val zSeconds = 2f * rampSeconds(zHub, profile.feedZMmMin, profile.accelZMmS2) *
-        machineStrokes.size
+    //
+    // Die beiden Richtungen sind BEWUSST verschieden schnell: gesenkt wird mit G1 und
+    // begrenztem Vorschub (sonst schlaegt der lose Stift auf), angehoben mit G0 im Eilgang.
+    val zSeconds = (
+        rampSeconds(zHub, profile.feedZMmMin, profile.accelZMmS2) +
+            rampSeconds(zHub, profile.rapidZMmMin, profile.accelZMmS2)
+        ) * machineStrokes.size
 
     var drawSeconds = 0f
     for (stroke in machineStrokes) {

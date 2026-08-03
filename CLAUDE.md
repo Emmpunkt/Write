@@ -16,7 +16,7 @@ angehobenem Stift.
 
 ## Stand 2026-08-03: zwei offene Punkte abgearbeitet, an der Maschine verifiziert
 
-154 Tests grün. Die Live-Prüfung gegen den echten Plotter lief (rein lesend, plus ein
+172 Tests grün. Die Live-Prüfung gegen den echten Plotter lief (rein lesend, plus ein
 bewegungsfreier SD-Testlauf) und hat drei Annahmen widerlegt – siehe „Die Maschine".
 
 **Auf Ansage des Nutzers (2026-08-03): Maschinenwerte gehören nicht ins Programm.** Verfahrweg,
@@ -56,13 +56,26 @@ Drei Annahmen waren falsch, alle drei nur durch Auslesen zu finden:
    Untergrenze 10). Vom Nutzer am selben Tag behoben, indem er `mpos_mm` wieder auf 3 setzte –
    G54 liegt jetzt exakt auf der Untergrenze: fahrbar, aber **ohne Reserve**.
 
-**Die Zeitschätzung holt die gemessene Lücke NICHT ein.** Mit der echten Beschleunigung von
-400 mm/s² bringt das Rampenmodell **+11 %** gegenüber der alten Rechnung; gemessen fehlten
-**+32 %**. Das Modell ist strukturell richtig und besser als vorher, erklärt aber nur ein
-Drittel. Der Rest steckt vermutlich in der Junction Deviation: `rampSeconds` nimmt an, der
-Planer fahre einen Strichzug ohne Zwischenstopp durch, während FluidNC an jeder scharfen Ecke
-abbremst. Wer das angeht, muss pro Ecke aus dem Winkel die erlaubte Durchfahrgeschwindigkeit
-rechnen – und sollte vorher an einem echten Bogen messen statt zu modellieren.
+### Zeitschätzung: an einem echten Bogen kalibriert
+
+Der erste Anlauf (nur Rampen) lag **+13 % zu hoch**. Der echte Bogen zeigte warum: **Das
+Anheben des Stifts ist ein Eilgang, das Absenken nicht.** `G1 Z-1.5 F600` zum Senken, aber
+`G0 Z3` zum Heben – und G0 fährt mit dem Höchstvorschub der Achse. Beide gleich zu rechnen
+macht jeden Hub zu lang. Dafür gibt es jetzt `rapidZMmMin` im Profil, gefüllt aus
+`max_rate_mm_per_min` der Z-Achse.
+
+Gemessen am 2026-08-03 (A6 quer, 396 Zeilen, 28 Hübe, real 55 s):
+
+| Modell | Schätzung | Abweichung |
+|---|---|---|
+| alte Formel `Weg / Vorschub` | 51 s | −7 % |
+| Rampen, Z-Hub einheitlich | 62 s | +13 % |
+| Rampen + Eilgang beim Anheben | 56,5 s | **+3 %** |
+
+**Eine Messung an einem Auftrag, keine Garantie.** Der frühere Befund (25 % zu niedrig) stammt
+von einem viel größeren Bogen, dessen damalige Einstellungen nicht mehr rekonstruierbar sind.
+Junction Deviation bleibt außen vor – `rampSeconds` nimmt an, der Planer fahre einen Strichzug
+ohne Zwischenstopp durch. Bei langem Text dürfte die Schätzung deshalb wieder zu knapp werden.
 
 ## Etappe 1 (2026-08-02)
 
@@ -235,8 +248,15 @@ Ende wird deshalb am Zustandswechsel `Run` → `Idle` erkannt.
 
 ### Noch offen bei Teil 1
 
-Ein **vollständiger echter Plot-Auftrag** über SD ist noch nicht gelaufen. Die Blockade ist
-weg (der Nutzer hat die Achsen passend gesetzt), es fehlt nur noch der Lauf mit Papier.
+**Erledigt am 2026-08-03:** Der vollständige Plot über SD lief auf Papier durch – „Hallo von
+der SD-Karte", A6 quer, 396 Zeilen, 28 Hübe, 55 s, `Completed`, Endzustand sauber auf dem
+Arbeitsnullpunkt mit angehobenem Stift. Der Fortschritt lief dabei sichtbar mit (4 % → 100 %):
+bei einer Datei dieser Größe hinkt der Lesefortschritt nicht mehr auf 100 % fest wie bei der
+37-Byte-Probe.
+
+Wiederholbar mit `./gradlew :machine:test -PplotterHost=<ip> -PplotterPlot=true`
+(`LivePlotTest`). Das zweite Flag ist Absicht: `-PplotterHost` allein startet nur die lesenden
+Fälle, ein Test der den Stift aufsetzt darf nicht versehentlich mitlaufen.
 
 ## Bekannte offene Punkte
 

@@ -118,6 +118,38 @@ class ZeitschaetzungTest {
         )
     }
 
+    /**
+     * Das Anheben des Stifts ist ein Eilgang, das Absenken nicht.
+     *
+     * Im erzeugten G-Code steht `G1 Z-1.5 F600` zum Senken, aber `G0 Z3` zum Heben - und G0
+     * faehrt mit dem Hoechstvorschub der Achse, nicht mit dem gesetzten. Wer beide gleich
+     * rechnet, schaetzt jeden Hub zu lang; bei hunderten Huebén je Auftrag summiert sich das.
+     *
+     * Am Geraet gemessen (2026-08-03): 55 s fuer einen Auftrag, den das Modell mit gleichem
+     * Z-Vorschub auf 62 s schaetzte.
+     */
+    @Test
+    fun `Anheben rechnet im Eilgang und ist schneller als das Absenken`() {
+        val langsam = profile.copy(feedZMmMin = 600, rapidZMmMin = 600)
+        val eilgang = profile.copy(feedZMmMin = 600, rapidZMmMin = 2000)
+
+        val a = generateGCode(listOf(zug(20f)), langsam).estimatedSeconds
+        val b = generateGCode(listOf(zug(20f)), eilgang).estimatedSeconds
+
+        assertTrue(b < a, "Der Eilgang beim Anheben wurde nicht beruecksichtigt: $b vs $a")
+    }
+
+    @Test
+    fun `Eilgang wird nicht unter den Zeichenvorschub gedrueckt`() {
+        // Gegenprobe: ein Profil ohne bekannten Eilgang darf nicht plotzlich langsamer
+        // rechnen als vorher. Die Vorgabe muss mindestens dem Z-Vorschub entsprechen.
+        val p = MachineProfile()
+        assertTrue(
+            p.rapidZMmMin >= p.feedZMmMin,
+            "Der Eilgang darf nicht unter dem gesetzten Z-Vorschub liegen",
+        )
+    }
+
     @Test
     fun `Beschleunigung muss positiv sein`() {
         val abgelehnt = runCatching { profile.copy(accelXYMmS2 = 0f) }.isFailure

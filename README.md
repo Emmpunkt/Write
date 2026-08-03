@@ -23,7 +23,7 @@ zweite Darstellung. Was auf dem Bildschirm steht, fährt der Stift.
 ## Bauen und installieren
 
 ```bash
-./gradlew test                 # 168 Tests, ohne Netz und ohne Gerät
+./gradlew test                 # 172 Tests, ohne Netz und ohne Gerät
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
@@ -211,11 +211,24 @@ die Schätzung ist dann ungenauer, aber nichts wird dadurch unsicher.
 Ein pauschaler Korrekturfaktor wäre der falsche Weg gewesen: er träfe den langen Strich genauso
 wie den kurzen, obwohl der Fehler nur bei den kurzen entsteht.
 
-**Was noch fehlt:** Mit der echten Beschleunigung bringt das Modell +11 %, gemessen fehlten
-+32 %. Es erklärt also nur ein Drittel der Lücke. Der Rest steckt vermutlich in der Junction
-Deviation, die hier außen vor bleibt: `rampSeconds` nimmt an, der Planer fahre einen Strichzug
-ohne Zwischenstopp durch, während FluidNC an jeder scharfen Ecke abbremst. Die Schätzung ist
-damit weiterhin eher knapp als zu großzügig.
+Ein zweiter Punkt kam aus derselben Messung: **Das Anheben des Stifts ist ein Eilgang, das
+Absenken nicht.** Der erzeugte G-Code senkt mit `G1 … F600` (begrenzt, sonst schlägt der lose
+Stift auf), hebt aber mit `G0` — und das fährt mit dem Höchstvorschub der Achse. Beide gleich
+zu rechnen macht jeden Hub zu lang; bei hunderten Hüben je Auftrag ist das deutlich sichtbar.
+
+Am 2026-08-03 an einem echten Bogen nachgemessen (A6 quer, 396 Zeilen, 28 Hübe, 55 s):
+
+| Modell | Schätzung | Abweichung |
+|---|---|---|
+| alte Formel `Weg / Vorschub` | 51 s | −7 % |
+| Rampen, Z-Hub einheitlich | 62 s | +13 % |
+| Rampen + Eilgang beim Anheben | 56,5 s | **+3 %** |
+
+Das ist **eine** Messung an **einem** Auftrag, keine Garantie. Der frühere Befund (25 % zu
+niedrig) stammt von einem viel größeren Bogen, dessen damalige Einstellungen nicht mehr
+rekonstruierbar sind. Junction Deviation bleibt weiterhin außen vor: `rampSeconds` nimmt an,
+der Planer fahre einen Strichzug ohne Zwischenstopp durch, während FluidNC an scharfen Ecken
+abbremst — bei einem langen Text dürfte die Schätzung deshalb wieder zu knapp werden.
 
 ## Zwei Wege zum Plotter
 
@@ -329,7 +342,7 @@ endete sauber auf dem Arbeitsnullpunkt mit angehobenem Stift (2026-08-02).
 - **Etappe 3, Teil 1 steht:** Upload auf die SD-Karte, zwei getrennte Sendewege.
 - **Etappe 3, offen:** Notizliste, Vorlagen mit Platzhaltern, gemischte Stile je Absatz.
 
-168 Tests grün, alle ohne Netz und ohne Gerät.
+172 Tests grün, alle ohne Netz und ohne Gerät.
 
 Hinweis zur Installation: Über USB brach die Übertragung reproduzierbar ab (Gerät ging
 mitten im Streamed Install offline). Über WLAN läuft sie zuverlässig:
