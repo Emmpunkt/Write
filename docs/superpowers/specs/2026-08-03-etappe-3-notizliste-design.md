@@ -27,21 +27,25 @@ Absatz, Suche, Ordner, Sortieroptionen, Papierkorb, Export.
 Die Trennlinie ist dieselbe wie bei den Maschinenwerten: *was ist Gestaltung* gegen *wie steht
 das Geraet*.
 
+Die Notiz traegt **Text und Schriftbild**, sonst nichts. Alles, was mit dem Blatt und der
+Maschine zu tun hat, bleibt global.
+
 | Pro Notiz (Datenbank) | Global (bleibt DataStore) |
 |---|---|
 | `text` | `host`, `telnetPort` |
 | `fontId`, `sizeMm`, `align` | `feedDrawMmMin`, `feedTravelMmMin`, `feedZMmMin` |
-| `lineSpacing`, `letterSpacing`, `wordSpacing`, `slantDeg` | `zUpMm`, `zDownMm` |
-| `paperWidthMm`, `paperHeightMm`, `marginMm` | `paperOffsetXMm`, `paperOffsetYMm` |
-| | `naturalWriteOrder` |
+| `lineSpacing`, `letterSpacing` | `zUpMm`, `zDownMm` |
+| `wordSpacing`, `slantDeg` | `paperWidthMm`, `paperHeightMm`, `marginMm` |
+| | `paperOffsetXMm`, `paperOffsetYMm`, `naturalWriteOrder` |
 
-Zwei Grenzfaelle, bewusst so entschieden:
+**Das Blattformat bleibt global** - Entscheidung des Nutzers am 2026-08-03. Begruendung: Er
+legt das Papier ein, und beim Umschalten auf eine andere Notiz soll nicht plotzlich ein anderes
+Format eingestellt sein als das, was auf dem Tisch liegt. Der **Rand** folgt derselben Logik
+und steht ohnehin schon heute im Einstellungen-Reiter, also dort, wo die globalen Werte
+stehen. Der **Papier-Offset** ebenso: Er beschreibt, wo die Blattecke am Anschlag liegt.
 
-- **Der Papier-Offset bleibt global.** Er beschreibt, wo das Blatt am Anschlag liegt, nicht wie
-  die Notiz aussieht. Wandert er in die Notiz, muesste man ihn nach jedem Verschieben des
-  Anschlags in jeder Notiz nachziehen.
-- **Das Blattformat gehoert zur Notiz.** Eine Grusskarte ist A6, eine Liste A5 - das ist eine
-  Eigenschaft des Dokuments. Der Papierbogen, den man einlegt, ist eine andere Sache.
+Folge fuer die Bedienung: Das Blatt-Auswahlfeld sitzt weiterhin im Editor (kurzer Weg), wirkt
+aber auf alle Notizen. Das ist gewollt und nicht als Dokumenteigenschaft misszuverstehen.
 
 Die Maschinenwerte (Verfahrweg, Beschleunigungen, Vorschubgrenzen) bleiben, wo sie seit dem
 2026-08-03 sind: sie werden beim Verbinden ausgelesen und gehoeren weder der Notiz noch den
@@ -55,7 +59,7 @@ data class NoteEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val text: String,
     val updatedAt: Long,          // Sortierung: zuletzt bearbeitet zuerst
-    // Schriftbild
+    // Schriftbild - und nur das. Blatt, Raender und Offset bleiben global.
     val fontId: String,
     val sizeMm: Float,
     val align: String,            // Enum als Name, damit die Datenbank lesbar bleibt
@@ -63,10 +67,6 @@ data class NoteEntity(
     val letterSpacing: Float,
     val wordSpacing: Float,
     val slantDeg: Float,
-    // Blatt
-    val paperWidthMm: Float,
-    val paperHeightMm: Float,
-    val marginMm: Float,
 )
 ```
 
@@ -161,7 +161,10 @@ faehrt.
    Start legt nichts Zusaetzliches an.
 5. **Repository gegen Fake-DAO**: speichern, laden, loeschen, Sortierung nach `updatedAt`.
 6. **Die Vorschau folgt der geladenen Notiz**: nach dem Umschalten stimmen Schrift, Groesse und
-   Blattformat mit der Notiz ueberein, nicht mit der vorherigen.
+   Laufweite mit der Notiz ueberein, nicht mit der vorherigen.
+   **Gegenprobe im selben Fall:** Blattformat, Rand und Papier-Offset bleiben dabei
+   unveraendert - sie gehoeren nicht der Notiz. Ein Umschalten darf das eingelegte Papier
+   nicht "aendern".
 7. **Die letzte Notiz laesst sich nicht loeschen**, sondern wird geleert - der Editor darf nie
    ohne Notiz dastehen.
 
@@ -171,7 +174,10 @@ faehrt.
   ist der Preis fuer dauerhafte Speicherung; DataStore mit einer serialisierten Liste waere
   billiger, skaliert aber schlecht und macht Teilaktualisierungen umstaendlich.
 - **Der Umbau fasst `AppSettings` an**, und damit die Stelle, an der Layout, Vorschau und
-  Grenzpruefung haengen. Die Stilwerte wandern aus dem globalen Zustand in die Notiz; jeder
+  Grenzpruefung haengen. Sieben Felder wandern aus dem globalen Zustand in die Notiz; jeder
   Aufrufer muss mitgezogen werden. Die vorhandenen Tests der Layout-Kette decken das ab.
+
+  Kleiner geworden ist das Risiko dadurch, dass Blatt, Rand und Offset global bleiben:
+  `toFrame()` und die Grenzpruefung bleiben unberuehrt, betroffen ist nur `toTextStyle()`.
 - **Datenverlust bei fehlerhafter Migration.** Deshalb wird `lastText` nicht geloescht, sondern
   nur nicht mehr gelesen.
