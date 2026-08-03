@@ -23,7 +23,7 @@ zweite Darstellung. Was auf dem Bildschirm steht, fährt der Stift.
 ## Bauen und installieren
 
 ```bash
-./gradlew test                 # 195 Tests, ohne Netz und ohne Gerät
+./gradlew test                 # 243 Tests, ohne Netz und ohne Gerät
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
@@ -252,6 +252,48 @@ Notiz**, und die **letzte wird geleert statt gelöscht**. Der Editor darf nie oh
 dastehen. Welche Notiz offen ist, wird gemerkt und nicht aus den Zeitstempeln erschlossen —
 beim Wechseln wird die *verlassene* Notiz gespeichert und trüge danach die neuere Zeit.
 
+## Serie: viele Karten am Stück
+
+Für einen Satz gleichartiger Karten — Platzkarten, Einladungen. Eine **Vorlage** mit benannten
+Platzhaltern in geschweiften Klammern, dazu eine Werteliste:
+
+```
+Vorlage:  {anrede} {name}, wir freuen uns auf dich!
+Werte:    Liebe;Anna
+          Lieber;Bernd
+```
+
+Eine Zeile je Bogen, Felder durch **Semikolon** getrennt. Die Spalten ordnen sich den
+Platzhaltern in der Reihenfolge ihres ersten Auftretens zu; der Reiter zeigt die erwartete Form
+über dem Feld an. Das Komma schied als Trennzeichen aus, weil es in Namen vorkommt („Schmidt,
+Anna"). Ein Wert mit Semikolon ist damit nicht darstellbar — bei Anreden und Namen belanglos.
+
+Benannt statt durchnummeriert, weil man `{anrede} {name}` nach Monaten noch versteht; bei
+`{1} {2}` müsste man die Werteliste danebenlegen und abzählen.
+
+**Eine Vorlage trägt Schriftbild UND Blattformat** — das ist der Unterschied zur Notiz. Eine
+Grußkarte bringt ihr Format mit, eine Notiz wird auf das Papier geschrieben, das gerade auf dem
+Tisch liegt. Der **Papier-Offset** bleibt trotzdem global: Er beschreibt, wo die Blattecke am
+Anschlag liegt, und das ändert sich nicht dadurch, dass ein kleineres Blatt eingelegt wird.
+
+**Vor dem Start wird jeder Bogen durchgerechnet** — mit demselben `layoutText`, aus dem auch
+Vorschau und G-Code entstehen. Läuft einer über oder wird ein Wort mitten im Wort getrennt,
+nennt die App Bogennummer und Namen („Bogen 14 „Christiane Schmidt-Wagner" läuft über") und
+sperrt den Start. Kein verschwendetes Papier. Zeilen mit falscher Feldzahl werden gemeldet
+statt stillschweigend ergänzt — eine Lücke fiele erst auf dem Papier auf.
+
+**Ein Auftrag je Bogen.** Nach jedem hält die App an („Bogen 3 von 20 fertig — nächstes Blatt
+einlegen") und wartet auf Knopfdruck. Ein fehlgeschlagener Bogen **rückt den Zähler nicht
+weiter**: „Nochmal" plottet denselben, erst „Überspringen" geht weiter. Das ist der Unterschied
+zwischen „das Blatt ist verrutscht" und „diesen Namen lasse ich weg".
+
+Beide Sendewege funktionieren, weil die Serie nur die vorhandene Auftragskette je Bogen aufruft
+— samt Grenzprüfung und Rückfahrt auf den Nullpunkt.
+
+> **Nach einem Abbruch ist die Maschine nicht mehr referenziert.** Der Not-Halt setzt die
+> Steuerung zurück; der nächste Bogen meldet dann „noch nicht referenziert". Erst wieder
+> Homing fahren, dann weiter.
+
 ## Zwei Wege zum Plotter
 
 | | **Auf SD senden** | **Direkt senden** |
@@ -364,9 +406,11 @@ endete sauber auf dem Arbeitsnullpunkt mit angehobenem Stift (2026-08-02).
 - **Etappe 3, Teil 1 steht:** Upload auf die SD-Karte, zwei getrennte Sendewege.
 - **Etappe 3, Teil 2 steht:** Notizliste mit Room, jede Notiz mit eigenem Schriftbild.
   Am 2026-08-03 am Gerät durchgespielt.
-- **Etappe 3, offen:** Vorlagen mit Platzhaltern, gemischte Stile je Absatz.
+- **Etappe 3, Teil 3 steht:** Vorlagen mit Platzhaltern und Serienlauf. Am 2026-08-03 an der
+  Maschine gefahren — drei Bogen mit Blattwechsel, dazu der Fehlschlag-Pfad.
+- **Etappe 3, offen:** gemischte Stile je Absatz.
 
-195 Tests grün, alle ohne Netz und ohne Gerät.
+243 Tests grün, alle ohne Netz und ohne Gerät.
 
 Hinweis zur Installation: Über USB brach die Übertragung reproduzierbar ab (Gerät ging
 mitten im Streamed Install offline). Über WLAN läuft sie zuverlässig:

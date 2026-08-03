@@ -240,6 +240,38 @@ Zeitstempeln erschlossen – beim Wechseln wird aber die *verlassene* Notiz gesp
 trägt danach die neuere Zeit. Sie wird jetzt gemerkt (`offeneNotizId` in den Einstellungen).
 Merksatz: „zuletzt bearbeitet" ist nicht „zuletzt angesehen".
 
+### Teil 3 steht: Vorlagen und Serienlauf (2026-08-03)
+
+Eine zweite Room-Tabelle (`templates`, DB-Version 2 **mit Migration** — die Notizen bleiben).
+Die Ablaufsteuerung `Serienlauf` bekommt das Plotten als Funktion hereingereicht und kennt
+weder Telnet noch SD-Karte; dadurch sind Fehlschlag, Wiederholung, Überspringen, Abbruch und
+Wiederaufnahme ohne Maschine prüfbar.
+
+**Trennzeichen der Werteliste ist das Semikolon.** Das Komma schied aus, weil es in Namen
+vorkommt („Schmidt, Anna"); der Tabulator lässt sich auf einer Telefontastatur nicht tippen.
+Diese Entscheidung bitte nicht ungefragt umdrehen — ein Wert mit Semikolon ist als Preis dafür
+bewusst nicht darstellbar.
+
+Anders als eine Notiz trägt eine Vorlage **das Blattformat mit** (die Grußkarte bringt ihr
+Format mit). Der Papier-Offset bleibt global — er beschreibt den Anschlag.
+
+**Drei Fehler, die erst das Gerät zeigte** — alle drei bei grünen Tests auf dem PC:
+
+1. Das Platzhalter-Muster `\{([\p{L}\p{N}_-]+)}` warf am Gerät eine `PatternSyntaxException`.
+   **Java ist bei Regex nachsichtiger als Androids ICU** — schließende geschweifte Klammer und
+   Bindestrich müssen maskiert sein. Regex-Feinheiten gehören ans Gerät, nicht nur in den Test.
+2. `PreviewCanvas` hat keine eigene Höhe; ohne `Modifier.height(...)` fällt sie auf ihre
+   Polsterung zusammen.
+3. Drei Knöpfe nebeneinander quetschten „Nächster Bogen" zu einer senkrechten Buchstabensäule.
+
+**Nach einem Not-Halt ist die Maschine nicht mehr referenziert.** Der nächste Bogen meldet das
+sauber als Fehlschlag, der Zähler bleibt stehen. Vor dem Weiterplotten neu homen.
+
+**Beim Bedienen per adb:** Ein Bogen dauert ~25 s, ein Werkzeug-Roundtrip 15–20 s. Ein Abbruch
+„mittendrin" ist mit Einzelbefehlen nicht zu treffen — Start und Abbruch gehören in EINEN
+Aufruf, und Knopfpositionen holt man mit `uiautomator dump` statt sie aus Bildschirmfotos zu
+schätzen.
+
 Entwurfsentscheidung (2026-08-03): **zwei getrennte Knöpfe** – „Auf SD senden" und „Direkt
 senden". Beide durchlaufen dasselbe `preflight`; der SD-Weg bekommt keine zweite
 Sicherheitslogik.
