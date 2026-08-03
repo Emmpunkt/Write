@@ -45,7 +45,13 @@ und steht ohnehin schon heute im Einstellungen-Reiter, also dort, wo die globale
 stehen. Der **Papier-Offset** ebenso: Er beschreibt, wo die Blattecke am Anschlag liegt.
 
 Folge fuer die Bedienung: Das Blatt-Auswahlfeld sitzt weiterhin im Editor (kurzer Weg), wirkt
-aber auf alle Notizen. Das ist gewollt und nicht als Dokumenteigenschaft misszuverstehen.
+aber auf alle Notizen. Vom Nutzer bestaetigt - der Editor ist das erste Fenster, dort wird
+eingestellt und danach gewechselt; das Format bleibt im Alltag ohnehin meist dasselbe.
+
+**Ausblick auf Teil 3 (Vorlagen), hier bewusst noch nicht gebaut:** Genau bei einer Grusskarte
+waere ein abweichendes Format erwuenscht. Das ist der Unterschied zwischen einer Notiz und
+einer Vorlage - eine Vorlage darf ein Format mitbringen, eine gewoehnliche Notiz nicht. Wenn
+Teil 3 ansteht, ist das der Ort dafuer, nicht das Notizmodell.
 
 Die Maschinenwerte (Verfahrweg, Beschleunigungen, Vorschubgrenzen) bleiben, wo sie seit dem
 2026-08-03 sind: sie werden beim Verbinden ausgelesen und gehoeren weder der Notiz noch den
