@@ -17,7 +17,7 @@ gebaut ist und wofuer Handschrift den Unterschied macht.
 | Frage | Entscheidung |
 |---|---|
 | Zweck | **Serie**: viele Karten am Stueck, nicht nur ein Textbaustein |
-| Platzhalter | **Erstmal einer**, das Modell aber so schneiden, dass mehrere ohne Umbau folgen |
+| Platzhalter | **Mehrere, benannt.** Nachgereichte Begruendung des Nutzers: „Liebe/Lieber" muss je Karte mitwandern, wenn die Anrede zum Namen passen soll. Ein einzelner Platzhalter reicht dafuer nicht. |
 | Ablauf | **Ein Auftrag je Bogen**, die App wartet dazwischen auf Knopfdruck |
 | Ort | **Eigener Reiter „Serie"** neben Notiz/Maschine/Einstellungen |
 | Ueberlauf | **Vorher alle pruefen, Start sperren**, bis kein Bogen mehr uebersteht |
@@ -43,9 +43,12 @@ data class TemplateEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
     /** Name der Vorlage, z. B. "Platzkarten Hochzeit". */
     val name: String,
-    /** Text mit Platzhalter in geschweiften Klammern: "Liebe {name}," */
+    /** Text mit Platzhaltern in geschweiften Klammern: "{anrede} {name}," */
     val text: String,
-    /** Werte, eine Zeile je Bogen. Mitgespeichert, damit ein Satz wiederholbar ist. */
+    /**
+     * Werte als kleine Tabelle: eine Zeile je Bogen, Felder durch Semikolon getrennt.
+     * Mitgespeichert, damit ein Satz wiederholbar ist.
+     */
     val werte: String,
     val updatedAt: Long,
 
@@ -70,10 +73,24 @@ ist genau die Form, in der der Nutzer sie eintippt oder aus der Zwischenablage e
 zweite Tabelle brauchte Fremdschluessel und Sortierung fuer eine Liste, die als Text schon
 richtig sortiert ist.
 
-**Platzhalter benannt, nicht positionell.** Auch bei nur einem erlaubten Platzhalter steht
-`{name}` im Text und nicht `{}`. Kommen spaeter `{tisch}` und `{datum}` dazu, aendert sich am
-gespeicherten Text nichts — nur die Werteliste wird von einer Spalte zu mehreren. Das
-Datenbankschema bleibt unberuehrt.
+**Platzhalter benannt, nicht positionell.** Im Text steht `{name}` und nicht `{}`. Die Spalten
+der Werteliste ordnen sich den Platzhaltern in der Reihenfolge ihres **ersten Auftretens im
+Text** zu. Beispiel:
+
+```
+Vorlage:  "{anrede} {name}, wir freuen uns auf dich!"
+Werte:    Liebe;Anna
+          Lieber;Bernd
+```
+
+**Trennzeichen ist das Semikolon.** Ein Komma schied aus, weil es in Namen vorkommt („Schmidt,
+Anna"); der Tabulator laesst sich auf einer Telefontastatur nicht tippen. Ein Wert, der selbst
+ein Semikolon enthaelt, ist damit nicht darstellbar — das ist die bewusst in Kauf genommene
+Grenze, und sie faellt bei Namen und Anreden nicht ins Gewicht.
+
+Warum benannte Platzhalter und nicht `{1}`/`{2}`: Wer die Vorlage nach drei Monaten wieder
+oeffnet, liest `{anrede} {name}` und weiss sofort, welche Spalte was ist. Bei `{1} {2}` muesste
+er die Werteliste danebenlegen und abzaehlen.
 
 ## Reine Logik (`VorlagenLogik.kt`)
 
@@ -81,17 +98,32 @@ Ohne Android, damit alles auf dem PC pruefbar bleibt — dasselbe Muster wie `No
 
 | Funktion | Aufgabe |
 |---|---|
-| `platzhalterIn(text: String): List<String>` | Namen der Platzhalter, in Reihenfolge, ohne Doppelte |
+| `platzhalterIn(text: String): List<String>` | Namen der Platzhalter, in Reihenfolge des ersten Auftretens, ohne Doppelte |
 | `vorlagenFehler(text: String): String?` | `null`, wenn die Vorlage brauchbar ist; sonst die Meldung |
-| `werteZeilen(eingabe: String): List<String>` | Zeilen trimmen, leere weglassen |
+| `werteZeilen(eingabe: String, spalten: List<String>): List<WerteZeile>` | Zeilen zerlegen und den Platzhaltern zuordnen |
 | `einsetzen(text: String, werte: Map<String, String>): String` | Platzhalter ersetzen |
-| `bogenTexte(vorlage: String, werte: List<String>): List<String>` | ein fertiger Text je Bogen |
 | `AppSettings.mitVorlage(v: TemplateEntity): AppSettings` | Schriftbild **und Blatt** ueberlagern |
 | `AppSettings.zuVorlage(id, name, text, werte, jetzt): TemplateEntity` | der Rueckweg |
 
-`vorlagenFehler` meldet zwei Faelle: kein Platzhalter („Die Vorlage enthält keinen Platzhalter
-wie {name}.") und mehr als einer („Vorerst ist nur ein Platzhalter möglich, gefunden: {name},
-{tisch}."). Die zweite Meldung nennt die gefundenen Namen — sonst sucht der Nutzer im Text.
+```kotlin
+data class WerteZeile(
+    val nummer: Int,                     // 1-basiert, wie angezeigt
+    val felder: Map<String, String>,     // Platzhaltername -> Wert
+    /** null, wenn die Zeile brauchbar ist; sonst die Meldung fuer den Nutzer. */
+    val fehler: String?,
+) { val text: String get() = felder.values.joinToString(" ") }
+```
+
+`vorlagenFehler` meldet **einen** Fall: kein Platzhalter („Die Vorlage enthält keinen
+Platzhalter wie {name}."). Mehrere sind ausdruecklich erlaubt.
+
+**Zeilen mit falscher Feldzahl werden gemeldet, nicht geraten.** Bei zwei Platzhaltern und der
+Zeile `Anna` lautet die Meldung: „Zeile 3 hat 1 Feld, erwartet werden 2 (anrede;name)." Die
+Alternative — fehlende Felder leer lassen — erzeugte eine Karte mit einer Lücke, die erst auf
+dem Papier auffiele.
+
+**Leere Felder sind dagegen erlaubt.** `;Anna` ist eine gueltige Zeile mit leerer Anrede: Nicht
+jede Karte braucht jedes Feld, und ein Titel oder Zusatz fehlt oft berechtigt.
 
 Ein unbekannter Platzhalter in `einsetzen` bleibt stehen, statt zu leeren. Ein sichtbares
 `{tisch}` auf dem Bogen ist ein Fehler, den man sieht; eine stillschweigende Luecke nicht.
@@ -104,15 +136,16 @@ von der Vorschau abweichen.
 
 ```kotlin
 data class BogenBefund(
-    val index: Int,          // 0-basiert intern, 1-basiert angezeigt
-    val wert: String,
+    val index: Int,                  // 0-basiert intern, 1-basiert angezeigt
+    /** Die Felder der Zeile, fuer die Meldung: „Liebe Christiane Schmidt-Wagner". */
+    val bezeichnung: String,
     val ueberlauf: Boolean,          // Text hoeher als das Blatt
     val hartGetrennt: Set<String>,   // Woerter, die mitten im Wort umbrochen wurden
 ) { val inOrdnung: Boolean get() = !ueberlauf && hartGetrennt.isEmpty() }
 
 fun pruefeBogen(
-    werte: List<String>,
-    texte: List<String>,      // die fertig eingesetzten Bogentexte, gleich lang wie werte
+    zeilen: List<WerteZeile>,   // nur die fehlerfreien; kaputte meldet schon werteZeilen
+    vorlage: String,
     style: TextStyle,
     frame: Frame,
     font: StrokeFont,
@@ -195,7 +228,9 @@ Von oben nach unten:
 1. **Vorlage** — Auswahlfeld, „+ Neu", Löschen mit Rueckfrage
 2. **Name** und **Vorlagentext** mit Hinweis auf `{name}`
 3. **Schriftbild und Blatt** — die Regler aus dem Editor, unveraendert
-4. **Werteliste** — mehrzeiliges Feld, eine Zeile je Bogen, mit Zaehler „20 Bogen"
+4. **Werteliste** — mehrzeiliges Feld, eine Zeile je Bogen. Darueber steht, was erwartet wird:
+   „je Zeile: **anrede;name**" — abgeleitet aus dem Vorlagentext, damit der Nutzer die
+   Spaltenfolge nicht aus dem Text abzaehlen muss. Dazu der Zaehler „20 Bogen"
 5. **Vorschau des ersten Bogens**
 6. **Befund der Vorpruefung** — die Problemfaelle namentlich, oder „Alle 20 Bogen passen"
 7. **Starten**, gesperrt solange ein Bogen uebersteht
@@ -217,10 +252,11 @@ herauszuloesen macht sie kleiner, nicht groesser.
 
 **Ohne Geraet und ohne Netz:**
 
-- Platzhalter finden, auch mehrere und doppelte
-- `vorlagenFehler`: kein Platzhalter, mehr als einer, Rand breiter als das Blatt
-- Werteliste: leere Zeilen, Rand-Leerzeichen, Umlaute
-- `einsetzen`: unbekannter Platzhalter bleibt stehen
+- Platzhalter finden: mehrere, doppelt genannte, Reihenfolge des ersten Auftretens
+- `vorlagenFehler`: kein Platzhalter, Rand breiter als das Blatt
+- Werteliste: leere Zeilen, Rand-Leerzeichen, Umlaute, **zu wenige und zu viele Felder**,
+  **leeres Feld ist erlaubt**
+- `einsetzen`: unbekannter Platzhalter bleibt stehen, mehrere Felder in einer Zeile
 - Hin- und Rueckweg Vorlage ↔ `AppSettings`, **einschliesslich Blattformat**
 - Ueberlaufpruefung: ein zu langer Wert wird gemeldet, ein passender nicht
 - **Der ganze Serienablauf gegen eine Attrappe:** durchlaufen, Fehlschlag mit Wiederholung,
@@ -232,8 +268,10 @@ dazwischen.
 
 ## Bewusst nicht in diesem Schnitt
 
-- **Mehrere Platzhalter** — das Modell traegt sie, die Oberflaeche noch nicht
+- **Semikolon im Wert** — nicht darstellbar, kein Maskieren. Bei Anreden und Namen belanglos
 - **CSV- oder Dateiimport** — die Zwischenablage deckt den Fall ab
+- **Spaltenweise Eingabemaske** (je Feld eine eigene Spalte mit Kopfzeile) — der mehrzeilige
+  Text ist tippbar und einfuegbar; ein Tabellenraster auf einem Telefon ist es kaum
 - **Automatische Nummerierung oder Datum** — waeren eigene Platzhaltersorten
 - **Papierkorb fuer Vorlagen** — wie bei den Notizen: Loeschen fragt nach, das genuegt
 - **Gemischte Stile je Absatz** — das ist Teil 4
