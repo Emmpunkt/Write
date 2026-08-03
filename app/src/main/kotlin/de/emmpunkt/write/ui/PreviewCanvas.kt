@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -45,6 +46,11 @@ fun PreviewCanvas(
         modifier = modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceVariant)
+            // Ohne Beschneiden malt die Vorschau ueber ihren eigenen Rand hinaus.
+            // Passt der Text nicht auf das Blatt, standen die ueberzaehligen Zeilen quer
+            // ueber den Bedienelementen darunter - am Geraet aufgefallen. Auf dem Papier
+            // gibt es diesen Ueberlauf nicht, dort endet das Blatt einfach.
+            .clipToBounds()
             .padding(8.dp),
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {

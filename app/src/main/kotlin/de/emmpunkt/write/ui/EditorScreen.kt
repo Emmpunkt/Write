@@ -21,6 +21,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -117,22 +118,38 @@ fun EditorScreen(
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = document.job?.let { job ->
                             val zeit = job.estimatedSeconds.roundToInt()
-                            val dauer = if (zeit >= 60) "${zeit / 60} min ${zeit % 60} s" else "$zeit s"
-                            "%.0f mm Strich · %d Hübe · ca. %s".format(
+                            // Kompakt halten: die Zeile teilt sich den Platz mit dem Schalter,
+                            // und "1 min 8 s" trieb sie in den Umbruch.
+                            val dauer = if (zeit >= 60) {
+                                "%d:%02d".format(Locale.GERMANY, zeit / 60, zeit % 60)
+                            } else {
+                                "$zeit s"
+                            }
+                            "%.0f mm · %d Hübe · ca. %s".format(
                                 Locale.GERMANY, job.drawLengthMm, job.penDownCount, dauer,
                             )
                         } ?: "Noch kein Text",
                         style = MaterialTheme.typography.bodySmall,
+                        // Der Kennzahlentext wird mit der Textmenge laenger. Ohne weight()
+                        // nimmt er dem Schalter rechts den Platz, bis dessen Beschriftung
+                        // umbricht - am Geraet aufgefallen.
+                        modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = { showTravel = !showTravel }) {
-                        Text(if (showTravel) "Wege aus" else "Wege")
-                    }
+                    FilterChip(
+                        selected = showTravel,
+                        onClick = { showTravel = !showTravel },
+                        label = {
+                            // Eine Zeile, nie umbrechend: der Schalter behaelt seine Groesse,
+                            // egal wie lang die Kennzahlen daneben werden.
+                            Text("Leerfahrten", maxLines = 1, softWrap = false)
+                        },
+                    )
                 }
             }
         }
