@@ -25,16 +25,23 @@ class NoteRepository(private val dao: NoteDao) {
      *
      * [lastText] wird dabei nicht geloescht. Ginge bei der Umstellung etwas schief, waere der
      * Text sonst unwiederbringlich weg.
+     *
+     * [offeneId] ist die zuletzt geoeffnete Notiz. Sie wird gemerkt und nicht aus den
+     * Zeitstempeln erschlossen: beim Wechseln wird die VERLASSENE Notiz gespeichert und traegt
+     * danach die neuere Zeit - die App zeigte nach einem Neustart sonst die falsche.
      */
     suspend fun sicherstellenDassEineDaIst(
         lastText: String,
         vorgabe: AppSettings,
         jetzt: Long,
+        offeneId: Long = 0L,
     ): NoteEntity {
         if (dao.anzahl() == 0) {
             val id = dao.speichern(vorgabe.zuNotiz(id = 0L, text = lastText, jetzt = jetzt))
             return checkNotNull(dao.laden(id)) { "Gerade angelegte Notiz nicht auffindbar" }
         }
+        // Ist sie inzwischen geloescht, gilt wieder die zuletzt bearbeitete.
+        dao.laden(offeneId)?.let { return it }
         return checkNotNull(dao.zuletztBearbeitete()) {
             "Tabelle ist nicht leer, liefert aber nichts"
         }

@@ -132,17 +132,21 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
                 lastText = loaded.lastText,
                 vorgabe = loaded,
                 jetzt = System.currentTimeMillis(),
+                offeneId = loaded.offeneNotizId,
             )
             uebernehmen(notiz)
         }
     }
 
     /** Legt eine geladene Notiz in den Arbeitszustand: Text und Schriftbild. */
-    private fun uebernehmen(notiz: NoteEntity) {
+    private suspend fun uebernehmen(notiz: NoteEntity) {
         _aktuelleNotizId.value = notiz.id
         _text.value = notiz.text
-        _settings.value = _settings.value.mitNotiz(notiz)
+        _settings.value = _settings.value.mitNotiz(notiz).copy(offeneNotizId = notiz.id)
         recompute()
+        // Sofort merken und nicht erst beim naechsten Speichern: wird die App direkt nach dem
+        // Wechsel beendet, oeffnete sie sonst wieder die vorige Notiz.
+        repository.update(_settings.value)
     }
 
     fun onTextChanged(value: String) {

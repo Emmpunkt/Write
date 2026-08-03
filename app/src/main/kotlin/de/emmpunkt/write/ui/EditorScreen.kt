@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import de.emmpunkt.write.core.font.Fonts
 import de.emmpunkt.write.core.layout.Align
 import de.emmpunkt.write.data.AppSettings
+import de.emmpunkt.write.data.NoteEntity
 import de.emmpunkt.write.data.PaperPresets
 import de.emmpunkt.write.machine.SendProgress
 import java.util.Locale
@@ -71,9 +72,15 @@ fun EditorScreen(
     onPlot: () -> Unit,
     onPlotViaSd: () -> Unit,
     onStop: () -> Unit,
+    notizen: List<NoteEntity>,
+    aktuelleNotizId: Long,
+    onNotizOeffnen: (Long) -> Unit,
+    onNotizAnlegen: () -> Unit,
+    onNotizLoeschen: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showTravel by remember { mutableStateOf(false) }
+    var listeOffen by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -82,6 +89,29 @@ fun EditorScreen(
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = { listeOffen = !listeOffen }) {
+                Text(if (listeOffen) "Notizen schließen" else "Notizen (${notizen.size})")
+            }
+            TextButton(onClick = onNotizAnlegen) { Text("+ Neu") }
+        }
+
+        if (listeOffen) {
+            NotizListe(
+                notizen = notizen,
+                aktuelleId = aktuelleNotizId,
+                onOeffnen = {
+                    onNotizOeffnen(it)
+                    listeOffen = false
+                },
+                onLoeschen = onNotizLoeschen,
+            )
+        }
+
         OutlinedTextField(
             value = text,
             onValueChange = onTextChange,

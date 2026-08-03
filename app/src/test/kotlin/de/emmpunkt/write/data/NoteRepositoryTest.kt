@@ -73,6 +73,30 @@ class NoteRepositoryTest {
         assertEquals("Alte Notiz", zweite.text, "Nicht die vorhandene Notiz geliefert")
     }
 
+    @Test
+    fun `beim Start wird die zuletzt geoeffnete Notiz geliefert`() = runTest {
+        // Nicht die zuletzt GESCHRIEBENE: beim Wechseln wird die verlassene Notiz gespeichert
+        // und bekaeme damit den neueren Zeitstempel. Am Geraet fuehrte genau das dazu, dass
+        // die App nach dem Neustart eine andere Notiz zeigte als die zuletzt offene.
+        val (r, _) = repo()
+        val zuerst = r.speichern(vorgabe.zuNotiz(0L, "die offene", jetzt = 100L))
+        r.speichern(vorgabe.zuNotiz(0L, "spaeter geschrieben", jetzt = 300L))
+
+        val notiz = r.sicherstellenDassEineDaIst("", vorgabe, jetzt = 500L, offeneId = zuerst)
+
+        assertEquals("die offene", notiz.text)
+    }
+
+    @Test
+    fun `eine verschwundene offene Notiz faellt auf die zuletzt bearbeitete zurueck`() = runTest {
+        val (r, _) = repo()
+        r.speichern(vorgabe.zuNotiz(0L, "noch da", jetzt = 100L))
+
+        val notiz = r.sicherstellenDassEineDaIst("", vorgabe, jetzt = 500L, offeneId = 999L)
+
+        assertEquals("noch da", notiz.text)
+    }
+
     // ---- Loeschen ----
 
     @Test

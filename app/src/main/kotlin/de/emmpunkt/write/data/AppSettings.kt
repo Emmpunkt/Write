@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import de.emmpunkt.write.core.font.Fonts
@@ -58,8 +59,22 @@ data class AppSettings(
     val wordSpacing: Float = -0.3f,
     val slantDeg: Float = 0f,
 
-    /** Zuletzt bearbeiteter Text, damit nach dem Neustart nichts verloren ist. */
+    /**
+     * Text aus der Zeit vor der Notizliste.
+     *
+     * Wird nur noch gelesen: daraus entsteht beim ersten Start die erste Notiz. Bewusst nicht
+     * geloescht, damit der Text nicht weg waere, falls die Umstellung schiefginge.
+     */
     val lastText: String = "",
+
+    /**
+     * Die zuletzt geoeffnete Notiz.
+     *
+     * Gemerkt statt aus Zeitstempeln erschlossen: beim Wechseln wird die verlassene Notiz
+     * gespeichert und traegt danach die neuere Zeit. Am Geraet oeffnete die App nach einem
+     * Neustart deshalb eine andere Notiz als die zuletzt sichtbare.
+     */
+    val offeneNotizId: Long = 0L,
 ) {
     companion object {
         /**
@@ -166,6 +181,7 @@ class SettingsRepository(private val context: Context) {
             wordSpacing = p[Keys.wordSpacing] ?: defaults.wordSpacing,
             slantDeg = p[Keys.slant] ?: defaults.slantDeg,
             lastText = p[Keys.lastText] ?: defaults.lastText,
+            offeneNotizId = p[Keys.offeneNotizId] ?: defaults.offeneNotizId,
         )
     }
 
@@ -194,6 +210,7 @@ class SettingsRepository(private val context: Context) {
             p[Keys.wordSpacing] = s.wordSpacing
             p[Keys.slant] = s.slantDeg
             p[Keys.lastText] = s.lastText
+            p[Keys.offeneNotizId] = s.offeneNotizId
         }
     }
 
@@ -221,5 +238,6 @@ class SettingsRepository(private val context: Context) {
         val wordSpacing = floatPreferencesKey("word_spacing")
         val slant = floatPreferencesKey("slant")
         val lastText = stringPreferencesKey("last_text")
+        val offeneNotizId = longPreferencesKey("offene_notiz_id")
     }
 }
