@@ -25,6 +25,36 @@ data class MachineProfile(
     val feedZMmMin: Int = 600,
 
     /**
+     * Hoechstvorschub der Z-Achse, mit dem das ANHEBEN laeuft.
+     *
+     * Der erzeugte G-Code senkt den Stift mit `G1 ... F{feedZMmMin}` ab - begrenzt, damit ein
+     * lose aufliegender Stift nicht auf das Papier schlaegt. Angehoben wird dagegen mit `G0`,
+     * und ein Eilgang faehrt mit dem Hoechstvorschub der Achse (\$112), nicht mit dem
+     * gesetzten Wert.
+     *
+     * Geht nur in die Zeitschaetzung ein. Wer beide Richtungen gleich rechnet, schaetzt jeden
+     * Hub zu lang - bei hunderten Huebén je Auftrag deutlich sichtbar: am Geraet gemessene
+     * 55 s standen gegen 62 s geschaetzt.
+     */
+    val rapidZMmMin: Int = 2000,
+
+    /**
+     * Beschleunigung der Achsen, fuer die Zeitschaetzung.
+     *
+     * Ohne sie war die Schaetzung rund ein Viertel zu niedrig (gemessen 15 min statt
+     * geschaetzter 11:20): die alte Rechnung `Weg / Vorschub` unterstellt ueberall vollen
+     * Vorschub, waehrend die Maschine bei den kurzen Segmenten einer Schreibschrift schon
+     * wieder bremst, bevor sie ihn erreicht hat. Am Geraet gemessen schwankte der
+     * tatsaechliche Vorschub zwischen 157 und 1.804 mm/min.
+     *
+     * Auf den Weg hat der Wert keinen Einfluss - er geht ausschliesslich in die geschaetzte
+     * Dauer ein. Die Vorgabe ist der FluidNC-Standardwert; der wahre Wert des Geraets steht
+     * in \$120/\$121 (XY) und \$122 (Z) und laesst sich lesend abfragen.
+     */
+    val accelXYMmS2: Float = 200f,
+    val accelZMmS2: Float = 200f,
+
+    /**
      * Verfahrweg ab dem MASCHINENnullpunkt, Vorgabe aus \$130/\$131 des Plotters.
      *
      * Nicht ab dem Arbeitsnullpunkt - dieser Irrtum stand hier frueher und hat gekostet:
@@ -70,6 +100,12 @@ data class MachineProfile(
         require(zUpMm > zDownMm) { "Z_up muss ueber Z_down liegen" }
         require(feedDrawMmMin > 0 && feedTravelMmMin > 0 && feedZMmMin > 0) {
             "Vorschuebe muessen positiv sein"
+        }
+        require(accelXYMmS2 > 0f && accelZMmS2 > 0f) {
+            "Beschleunigungen muessen positiv sein"
+        }
+        require(rapidZMmMin >= feedZMmMin) {
+            "Der Eilgang der Z-Achse darf nicht unter ihrem gesetzten Vorschub liegen"
         }
         require(workAreaXMm > 0f && workAreaYMm > 0f) { "Arbeitsbereich muss positiv sein" }
     }

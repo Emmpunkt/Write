@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Erlaubt unverschluesselte Verbindungen.
+
+  Noetig fuer den Upload auf die SD-Karte: Android blockiert seit API 28 jeden
+  Klartext-Verkehr ueber seine HTTP-Stacks, und die WebUI von FluidNC spricht nur HTTP.
+  Ohne diese Datei scheitert `POST /upload` mit "Cleartext HTTP traffic to <ip> not permitted".
+
+  Warum der Telnet-Weg nie betroffen war: Die Sperre gilt fuer HttpURLConnection, OkHttp und
+  WebView - nicht fuer rohe Sockets. Der Befehlskanal auf Port 23 lief deshalb von Anfang an.
+
+  Warum keine Einschraenkung auf eine bestimmte Adresse: Die IP des Plotters ist in den
+  Einstellungen frei waehlbar, und diese Datei wird beim Bauen festgelegt. Eine eingetragene
+  Adresse waere genau die Art fester Wert, die bei einem Geraetewechsel unbemerkt bricht -
+  hier sogar unbehebbar, weil sie sich zur Laufzeit nicht aendern laesst.
+
+  Vertretbar, weil die App ausschliesslich mit einem Geraet im eigenen Netz spricht, das kein
+  TLS beherrscht. Sie ruft keine Dienste im Internet auf.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

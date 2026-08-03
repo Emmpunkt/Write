@@ -4,18 +4,28 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import de.emmpunkt.write.core.font.Fonts
+import de.emmpunkt.write.core.gcode.MachineLimits
 import de.emmpunkt.write.core.gcode.PlotJob
+import de.emmpunkt.write.core.gcode.applying
 import de.emmpunkt.write.core.gcode.toPlotJob
 import de.emmpunkt.write.core.layout.LaidOutText
 import de.emmpunkt.write.core.layout.fitSize
 import de.emmpunkt.write.core.layout.layoutText
 import java.util.Locale
 import de.emmpunkt.write.data.AppSettings
+import de.emmpunkt.write.data.NoteDatabase
+import de.emmpunkt.write.data.NoteEntity
+import de.emmpunkt.write.data.NoteRepository
 import de.emmpunkt.write.data.PlotWakeLock
 import de.emmpunkt.write.data.SettingsRepository
+import de.emmpunkt.write.data.mitNotiz
+import de.emmpunkt.write.data.neueNotiz
+import de.emmpunkt.write.data.zuNotiz
 import de.emmpunkt.write.machine.Axis
+import de.emmpunkt.write.machine.HttpSdTransfer
 import de.emmpunkt.write.machine.MachineController
 import de.emmpunkt.write.machine.MachineStatus
+import de.emmpunkt.write.machine.SdTransfer
 import de.emmpunkt.write.machine.SendProgress
 import de.emmpunkt.write.machine.TelnetTransport
 import de.emmpunkt.write.machine.Transport
@@ -23,9 +33,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -48,12 +60,34 @@ data class MachineUiState(
     val busy: Boolean = false,
     val progress: SendProgress? = null,
     val message: String? = null,
+    /**
+     * Ob der laufende Auftrag von der SD-Karte kommt.
+     *
+     * Bei zwei Sendewegen muss sichtbar sein, welcher lief - sonst deutet der Nutzer eine
+     * Stoerung falsch. Wirkt sich auch auf die Fortschrittsanzeige aus: der SD-Prozentwert
+     * ist der Lesefortschritt der Datei und eilt der Bewegung voraus.
+     */
+    val sdLauf: Boolean = false,
 )
 
 class PlotterViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repository = SettingsRepository(app)
     private val wakeLock = PlotWakeLock(app)
+    private val notes = NoteRepository(NoteDatabase.dao(app))
+
+    val notizen: StateFlow<List<NoteEntity>> = notes.notizen
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _aktuelleNotizId = MutableStateFlow(0L)
+    val aktuelleNotizId: StateFlow<Long> = _aktuelleNotizId.asStateFlow()
+
+    /**
+     * Laeuft, bis der Nutzer eine Weile nicht mehr tippt.
+     *
+     * Ohne diese Verzoegerung loeste jeder Tastendruck eine Schreibtransaktion aus.
+     */
+    private var speicherAuftrag: Job? = null
 
     private val _settings = MutableStateFlow(AppSettings())
     val settings: StateFlow<AppSettings> = _settings.asStateFlow()
@@ -69,6 +103,21 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
 
     private var controller: MachineController? = null
     private var transport: Transport? = null
+
+    /**
+     * Beschleunigung, wie die verbundene Maschine sie meldet - `null`, solange keine
+     * Verbindung stand. Bewusst nicht in den [AppSettings]: sie ist eine Eigenschaft des
+     * Plotters und nichts, was der Nutzer einstellt.
+     */
+    /**
+     * Was die verbundene Maschine ueber sich gemeldet hat.
+     *
+     * Bewusst NICHT in den [AppSettings]: das sind Eigenschaften des Geraets, keine
+     * Einstellungen. Ein gespeicherter Verfahrweg ueberlebt sonst eine Umkonfiguration oder
+     * wandert zu einem anderen Plotter mit - genau so entstand der Irrtum, die Untergrenze
+     * liege bei 3, waehrend sie ausgelesen bei 10 lag.
+     */
+    private var maschinenwerte: MachineLimits = MachineLimits.UNKNOWN
     private var plotJobHandle: Job? = null
     private var statusPollHandle: Job? = null
 
@@ -76,9 +125,28 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val loaded = repository.settings.first()
             _settings.value = loaded
-            _text.value = loaded.lastText
-            recompute()
+            // Der Text kommt ab jetzt aus der Notiztabelle. `lastText` ist nur noch die Quelle
+            // fuer die einmalige Umstellung und wird bewusst nicht mehr fortgeschrieben -
+            // waere die Umstellung schiefgegangen, laege der alte Text sonst nirgends mehr.
+            val notiz = notes.sicherstellenDassEineDaIst(
+                lastText = loaded.lastText,
+                vorgabe = loaded,
+                jetzt = System.currentTimeMillis(),
+                offeneId = loaded.offeneNotizId,
+            )
+            uebernehmen(notiz)
         }
+    }
+
+    /** Legt eine geladene Notiz in den Arbeitszustand: Text und Schriftbild. */
+    private suspend fun uebernehmen(notiz: NoteEntity) {
+        _aktuelleNotizId.value = notiz.id
+        _text.value = notiz.text
+        _settings.value = _settings.value.mitNotiz(notiz).copy(offeneNotizId = notiz.id)
+        recompute()
+        // Sofort merken und nicht erst beim naechsten Speichern: wird die App direkt nach dem
+        // Wechsel beendet, oeffnete sie sonst wieder die vorige Notiz.
+        repository.update(_settings.value)
     }
 
     fun onTextChanged(value: String) {
@@ -160,7 +228,7 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
         val result = runCatching {
             val font = Fonts.load(s.fontId)
             val laid = layoutText(_text.value, s.toTextStyle(), s.toFrame(), font)
-            val job = laid.toPlotJob(s.toMachineProfile())
+            val job = laid.toPlotJob(s.toMachineProfile().applying(maschinenwerte))
             DocumentState(
                 laidOut = laid,
                 job = job,
@@ -175,20 +243,98 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Schreibt den Arbeitszustand in die aktuelle Notiz - verzoegert.
+     *
+     * Die Einstellungen wandern weiterhin in den DataStore: ihre Stilwerte sind ab jetzt die
+     * Vorlage fuer die naechste neue Notiz.
+     */
     private fun persist() {
+        speicherAuftrag?.cancel()
+        speicherAuftrag = viewModelScope.launch {
+            delay(SPEICHER_VERZOEGERUNG_MS)
+            schreiben()
+        }
+    }
+
+    /** Schreibt sofort statt verzoegert - vor jedem Notizwechsel noetig. */
+    private suspend fun sofortSpeichern() {
+        speicherAuftrag?.cancel()
+        schreiben()
+    }
+
+    private suspend fun schreiben() {
+        val s = _settings.value
+        repository.update(s)
+        val id = _aktuelleNotizId.value
+        // id 0 heisst: die Startnotiz steht noch nicht. Bis dahin gaebe es nichts zu
+        // beschreiben, und ein Speichern legte versehentlich eine zweite Notiz an.
+        if (id != 0L) {
+            notes.speichern(s.zuNotiz(id, _text.value, System.currentTimeMillis()))
+        }
+    }
+
+    // ---- Notizen ----
+
+    fun notizOeffnen(id: Long) {
+        if (_machine.value.busy) return
         viewModelScope.launch {
-            repository.update(_settings.value.copy(lastText = _text.value))
+            // Erst den offenen Stand sichern, sonst geht das zuletzt Getippte verloren.
+            sofortSpeichern()
+            notes.laden(id)?.let { uebernehmen(it) }
+        }
+    }
+
+    fun notizAnlegen() {
+        if (_machine.value.busy) return
+        viewModelScope.launch {
+            sofortSpeichern()
+            val jetzt = System.currentTimeMillis()
+            val vorlage = notes.laden(_aktuelleNotizId.value)
+            val id = notes.speichern(neueNotiz(vorlage, _settings.value, jetzt))
+            notes.laden(id)?.let { uebernehmen(it) }
+        }
+    }
+
+    fun notizLoeschen(id: Long) {
+        if (_machine.value.busy) return
+        viewModelScope.launch {
+            val geleert = notes.loeschenOderLeeren(id, System.currentTimeMillis())
+            when {
+                // War es die letzte, bleibt sie offen - nur eben leer.
+                geleert != null -> uebernehmen(geleert)
+                // Die offene Notiz ist weg: auf die naechstbeste umschalten.
+                id == _aktuelleNotizId.value ->
+                    notes.zuletztBearbeiteteOderNull()?.let { uebernehmen(it) }
+            }
         }
     }
 
     // ---- Maschine ----
+
+    /**
+     * Der Upload-Weg zur SD-Karte, oder `null`, wenn keine Verbindungsdaten stehen.
+     *
+     * Laeuft ueber HTTP zur WebUI und damit auf einem anderen Port als der Telnet-Kanal - am
+     * Geraet geprueft: `POST /upload` funktioniert, obwohl `/command` `WebSocket dead` liefert.
+     */
+    private fun sdTransfer(): SdTransfer? {
+        val s = _settings.value
+        if (s.host.isBlank()) return null
+        return HttpSdTransfer(s.host)
+    }
 
     private fun buildController(): MachineController {
         val s = _settings.value
         transport?.let { runCatching { it.close() } }
         val t: Transport = TelnetTransport(s.host, s.telnetPort)
         transport = t
-        return MachineController(t, s.toMachineProfile()).also { controller = it }
+        // Bewusst ein Provider und keine Kopie: die Vorpruefung muss mit denselben Zahlen
+        // rechnen wie der G-Code, auch wenn waehrend der Verbindung etwas verstellt wird.
+        return MachineController(
+            t,
+            profileProvider = { _settings.value.toMachineProfile().applying(maschinenwerte) },
+        ).also { controller = it }
     }
 
     fun connect() = withMachine("Verbinden") {
@@ -299,11 +445,28 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Prueft den Auftrag und sendet ihn.
+     * Sendet den Auftrag Zeile fuer Zeile ueber Telnet.
      *
-     * Die Pruefung liegt im [MachineController]; hier wird nur angezeigt, was sie meldet.
+     * Die Verbindung muss dabei durchgehend stehen: reisst sie, bleibt der Stift mitten im
+     * Text auf dem Papier. Dagegen laufen die drei Wachhalte-Massnahmen.
      */
-    fun plot() {
+    fun plot() = sende(ueberSdKarte = false)
+
+    /**
+     * Legt den Auftrag als Datei auf der SD-Karte ab und startet ihn dort.
+     *
+     * Danach arbeitet die Maschine allein - ein Verbindungsabbruch bricht den Auftrag nicht
+     * mehr ab. Der Not-Halt bleibt erreichbar, solange die Verbindung steht.
+     */
+    fun plotViaSd() = sende(ueberSdKarte = true)
+
+    /**
+     * Prueft den Auftrag und sendet ihn auf dem gewaehlten Weg.
+     *
+     * Die Pruefung liegt im [MachineController] und ist fuer beide Wege dieselbe; hier wird
+     * nur angezeigt, was sie meldet.
+     */
+    private fun sende(ueberSdKarte: Boolean) {
         val c = controller
         val doc = _document.value
         val job = doc.job
@@ -321,19 +484,30 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
         // Die Vorpruefung bekommt die Zuege in Blatt-Koordinaten; den Papier-Offset rechnet
         // sie selbst dazu, damit sie genau die Koordinaten prueft, die spaeter gefahren werden.
         val blattStrokes = laid.strokes
+        val fluss = if (ueberSdKarte) {
+            c.plotViaSd(job, blattStrokes, sdTransfer())
+        } else {
+            c.plot(job, blattStrokes)
+        }
 
         plotJobHandle = viewModelScope.launch {
-            _machine.update { it.copy(busy = true, message = null, progress = null) }
-            // Waehrend des Auftrags duerfen Prozessor und WLAN nicht einschlafen.
+            _machine.update {
+                it.copy(busy = true, message = null, progress = null, sdLauf = ueberSdKarte)
+            }
+            // Waehrend des Auftrags duerfen Prozessor und WLAN nicht einschlafen. Beim
+            // SD-Weg genuegte streng genommen die Zeit des Uploads - aber solange die
+            // Fortschrittsanzeige mitlaeuft, wird die Verbindung weiter gebraucht.
             wakeLock.acquire()
             try {
-            c.plot(job, blattStrokes).collect { progress ->
+            fluss.collect { progress ->
                 _machine.update { state ->
                     state.copy(
                         progress = progress,
                         busy = progress is SendProgress.Started || progress is SendProgress.Running,
                         message = when (progress) {
-                            is SendProgress.Completed -> "Fertig geplottet"
+                            is SendProgress.Completed ->
+                                if (ueberSdKarte) "Fertig geplottet (von SD-Karte)"
+                                else "Fertig geplottet"
                             is SendProgress.Failed ->
                                 progress.message + if (progress.penLifted) " Stift angehoben." else
                                     " ACHTUNG: Stift konnte nicht angehoben werden."
@@ -371,11 +545,24 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
     private companion object {
         /** Schnell genug, um beim Fahren mitzulaufen, langsam genug fuer die Verbindung. */
         const val STATUS_POLL_MS = 600L
+
+        /** Wartezeit nach der letzten Aenderung, bevor gespeichert wird. */
+        const val SPEICHER_VERZOEGERUNG_MS = 500L
     }
 
     private fun observeController(c: MachineController) {
         viewModelScope.launch {
             c.connected.collect { connected -> _machine.update { it.copy(connected = connected) } }
+        }
+        viewModelScope.launch {
+            // Die Maschine kennt ihre Grenzen besser als jede gespeicherte Vorgabe. Sobald
+            // sie gelesen sind, wird mit ihnen gerechnet statt mit den Einstellungen.
+            c.limits.collect { gelesen ->
+                if (gelesen != maschinenwerte) {
+                    maschinenwerte = gelesen
+                    recompute()
+                }
+            }
         }
     }
 

@@ -14,6 +14,69 @@ Alles auf `main`, **118 Tests grün**, am echten Gerät und an der echten Maschi
 Der letzte Testbogen lief vollständig durch und endete sauber auf dem Arbeitsnullpunkt mit
 angehobenem Stift.
 
+## Stand 2026-08-03: zwei offene Punkte abgearbeitet, an der Maschine verifiziert
+
+172 Tests grün. Die Live-Prüfung gegen den echten Plotter lief (rein lesend, plus ein
+bewegungsfreier SD-Testlauf) und hat drei Annahmen widerlegt – siehe „Die Maschine".
+
+**Auf Ansage des Nutzers (2026-08-03): Maschinenwerte gehören nicht ins Programm.** Verfahrweg,
+Untergrenzen, Beschleunigungen und Vorschubgrenzen werden beim Verbinden aus `$/axes/*` geholt
+und über das Profil gelegt (`MachineLimits` + `MachineProfile.applying` im core). Gespeicherte
+Werte sind nur noch Rückfall ohne Verbindung. Automatisch statt Knopf – eine Abfrage, die man
+zu drücken vergisst, ist dieselbe Fehlerquelle wie ein fester Wert.
+
+Dabei fiel ein zweites Loch derselben Art auf und ist behoben: Der `MachineController` bekam
+sein Profil **einmal beim Verbinden**. Wer danach den Papier-Offset verstellte, erzeugte
+G-Code mit dem neuen Wert, während `preflight` noch gegen den alten prüfte. Jetzt bekommt er
+einen `profileProvider` statt einer Kopie. Abgesichert durch
+`Vorpruefung folgt einer spaeteren Aenderung der Einstellungen`.
+
+1. **Zeitschätzung rechnet mit Beschleunigungsrampen** statt `Weg / Vorschub` (`rampSeconds`
+   in `GCodeGenerator.kt`). Bewusst kein pauschaler Korrekturfaktor: der träfe den langen
+   Strich wie den kurzen, obwohl der Fehler nur bei den kurzen entsteht. Gerechnet wird
+   Bewegung für Bewegung, weil die Maschine an jedem Zugende wirklich steht (Stift hoch/runter
+   dazwischen) – über Gesamtlängen wären genau diese Stillstände unsichtbar.
+2. **`$/axes/x` und `$/axes/y` werden beim Verbinden ausgelesen** (`AxisSettings.kt`,
+   `MachineController.fetchAxisSettings`). Daraus kommen der wahre fahrbare Bereich
+   (`TravelLimits` → `checkBounds`) und die Beschleunigung für Punkt 1. Kennt die Firmware die
+   Abfrage nicht, gilt weiter der Rückfall `[0, workArea]`.
+
+### Was die Live-Prüfung ergeben hat
+
+Der Parser greift, das Antwortformat passt. Verifiziert gelesen:
+`TravelLimits(10, 165, 10, 115)`, Beschleunigung XY 400, Z 200.
+
+Drei Annahmen waren falsch, alle drei nur durch Auslesen zu finden:
+
+1. **`mpos_mm` war 10, nicht 3** – die Notiz von 2026-08-02 war überholt. (Inzwischen
+   steht es wieder auf 3, vom Nutzer nachgestellt. Eben deshalb steht der Wert nirgends fest.)
+2. **Die Z-Beschleunigung ist eine andere als die von XY** (200 vs. 400). Die erste Fassung
+   setzte beide gleich – bei Hunderten Stifthüben je Auftrag ein echter Fehler.
+3. **Der Arbeitsnullpunkt passte nicht mehr zum fahrbaren Bereich** (G54 auf 3,
+   Untergrenze 10). Vom Nutzer am selben Tag behoben, indem er `mpos_mm` wieder auf 3 setzte –
+   G54 liegt jetzt exakt auf der Untergrenze: fahrbar, aber **ohne Reserve**.
+
+### Zeitschätzung: an einem echten Bogen kalibriert
+
+Der erste Anlauf (nur Rampen) lag **+13 % zu hoch**. Der echte Bogen zeigte warum: **Das
+Anheben des Stifts ist ein Eilgang, das Absenken nicht.** `G1 Z-1.5 F600` zum Senken, aber
+`G0 Z3` zum Heben – und G0 fährt mit dem Höchstvorschub der Achse. Beide gleich zu rechnen
+macht jeden Hub zu lang. Dafür gibt es jetzt `rapidZMmMin` im Profil, gefüllt aus
+`max_rate_mm_per_min` der Z-Achse.
+
+Gemessen am 2026-08-03 (A6 quer, 396 Zeilen, 28 Hübe, real 55 s):
+
+| Modell | Schätzung | Abweichung |
+|---|---|---|
+| alte Formel `Weg / Vorschub` | 51 s | −7 % |
+| Rampen, Z-Hub einheitlich | 62 s | +13 % |
+| Rampen + Eilgang beim Anheben | 56,5 s | **+3 %** |
+
+**Eine Messung an einem Auftrag, keine Garantie.** Der frühere Befund (25 % zu niedrig) stammt
+von einem viel größeren Bogen, dessen damalige Einstellungen nicht mehr rekonstruierbar sind.
+Junction Deviation bleibt außen vor – `rampSeconds` nimmt an, der Planer fahre einen Strichzug
+ohne Zwischenstopp durch. Bei langem Text dürfte die Schätzung deshalb wieder zu knapp werden.
+
 ## Etappe 1 (2026-08-02)
 
 Vollständig gebaut, **am echten Gerät und an der echten Maschine verifiziert.**
@@ -31,12 +94,19 @@ Ausgelesen über Telnet (Port 23):
 
 | Größe | Wert | Bedeutung |
 |---|---|---|
-| `$130` / `$131` / `$132` | 155 / 105 / 30 mm | Arbeitsbereich |
+| `$130` / `$131` / `$132` | 155 / 105 / 30 mm | Verfahrweg **ab dem Maschinennullpunkt** |
 | `$110` / `$111` | 1500 mm/min | Maximaler XY-Vorschub |
 | `$112` | 2000 mm/min | Z-Vorschub |
+| `$120` / `$121` | 400 mm/s² | XY-Beschleunigung (geht in die Zeitschätzung ein) |
+| `$122` | 200 mm/s² | Z-Beschleunigung – **halb so groß wie XY**, nicht gleichsetzen |
+| `mpos_mm` (X, Y) | > 0 | Untergrenze des fahrbaren Bereichs, aus `$/axes/x` – **variabel** |
 | `$20` | 1 | Soft Limits **aktiv** |
-| `$22` | 1 | Homing aktiv (nur X/Y) |
+| `$22` | 1 | Homing aktiv (nur X/Y; Z hat `soft_limits: false`) |
 | `$10` | 1 | Statusbericht meldet MPos; WCO kommt nur periodisch |
+
+Alle Werte am 2026-08-03 über Telnet ausgelesen – **als Beispiel, nicht als Vorgabe.**
+Die App holt sie sich beim Verbinden selbst; `mpos_mm` hat sich binnen eines Tages von 3 auf 10
+und zurück auf 3 geändert.
 
 **Besonderheiten, die das Verhalten der App bestimmen:**
 
@@ -46,16 +116,23 @@ Ausgelesen über Telnet (Port 23):
 2. **Der Stiftantrieb ist nicht fest gekoppelt.** Sobald der Stift aufsetzt, trägt ihn nur
    noch sein Eigengewicht. Deshalb darf `Z_unten` bewusst unter der Papierebene liegen
    (Übertravel) – das gleicht Unebenheiten aus. Der Anpressdruck ist nicht einstellbar.
-3. **Der fahrbare Bereich ist Maschine 3…158 (X) bzw. 3…108 (Y), nicht 0…155.** In
-   `$/axes/x` und `$/axes/y` steht bei negativer Referenzfahrt `mpos_mm: 3.0`; nach dem Homing
-   steht die Maschine auf MPos (3, 3), und weiter zurück geht es nicht. Nachgemessen: ein Jog
-   auf Maschine 2 wird auf exakt 3.000 begrenzt. **`$130`/`$131` sind der Verfahrweg ab dem
-   Maschinennullpunkt, nicht ab dem Arbeitsnullpunkt.**
+3. **Der fahrbare Bereich beginnt nicht bei null.** In `$/axes/x` und `$/axes/y` steht bei
+   negativer Referenzfahrt ein `mpos_mm` > 0; fahrbar ist `[mpos_mm, mpos_mm + max_travel]`.
+   **`$130`/`$131` sind der Verfahrweg ab dem Maschinennullpunkt, nicht ab dem
+   Arbeitsnullpunkt.**
+
+   **Konkrete Zahlen gehören hier nicht hin** – sie haben sich schon zweimal geändert (3 → 10
+   → 3) und wurden beide Male zu spät bemerkt. Die App liest sie beim Verbinden aus; wer sie
+   sehen will, nimmt `./gradlew :machine:test -PplotterHost=<ip>`, dort stehen sie im
+   Protokoll.
 4. **Der Arbeitsnullpunkt (G54) ist nicht der Maschinennullpunkt.** Die App sendet in G54, die
-   Firmware addiert den Versatz. Stand 2026-08-02 liegt G54 auf Maschine (3, 3) – bewusst auf
-   der Untergrenze, damit das abschließende `G0 X0 Y0` überhaupt anfahrbar ist. Vorher lag er
-   auf (2, 2), also 1 mm darunter: der Auftrag brach am Ende mit ALARM:2 ab, nachdem der Text
-   fast fertig geschrieben war. `$#` liefert den aktuellen Wert.
+   Firmware addiert den Versatz. `$#` liefert den aktuellen Wert.
+
+   **Er muss auf oder über der Achsen-Untergrenze liegen.** Sonst ist schon die Rückfahrt
+   `G0 X0 Y0` am Ende jedes Auftrags unfahrbar, und der Alarm kommt, wenn das Blatt fertig
+   beschrieben ist. Genau das ist zweimal passiert. Die Grenzprüfung fängt es seit dem
+   2026-08-03 vorher ab; der Live-Fall
+   `meldet den Abstand zwischen Arbeitsnullpunkt und Untergrenze` zeigt die Reserve an.
 5. **Soft Limits greifen, aber erst mitten im Auftrag.** Eine Zielkoordinate außerhalb löst bei
    G0/G1 ALARM:2 aus – mit halb beschriebenem Blatt. Jog-Befehle verhalten sich anders: die
    werden auf die Grenze *begrenzt* statt abgewiesen. Wer daraus schließt, die Firmware prüfe
@@ -123,8 +200,80 @@ Zwei Dinge, die bei Arbeit an den Schriften Zeit sparen:
 
 ## Etappe 3 – „Bequem"
 
-Notizliste mit Room, Vorlagen mit Platzhaltern, gemischte Stile je Absatz, Upload auf SD
-(`POST /upload` + `$SD/Run=` – anderer Endpunkt als das entfernte `/command`).
+Notizliste mit Room, Vorlagen mit Platzhaltern, gemischte Stile je Absatz, Upload auf SD.
+Reihenfolge nach Entscheidung des Nutzers (2026-08-03): **SD-Upload zuerst**, danach
+Notizliste, Vorlagen, gemischte Stile.
+
+### SD-Weg am 2026-08-03 verifiziert – er funktioniert
+
+Am Gerät durchgespielt, mit einer bewegungsfreien Testdatei (nur `G21`/`G90`/`M2`), danach
+wieder gelöscht:
+
+- `POST /upload` (multipart, Felder `path=/` und die Datei) → **HTTP 200**, Datei liegt mit
+  exakter Größe auf der Karte. Antwort ist die Dateiliste als JSON.
+- `$SD/Run=/datei.nc` über Telnet → `ok`, dann `[MSG:INFO: Program End]`. Position unverändert.
+- `$SD/List` listet, `$SD/Delete=/datei.nc` löscht.
+- Karte ist bestückt und voll mit älteren Aufträgen (`$SD/Status` → `SD card detected`).
+
+**Wichtig:** `POST /upload` funktioniert, obwohl `/command` weiterhin `WebSocket dead` liefert.
+Der frühere Schluss „HTTP ist bei diesem Gerät wertlos" gilt also nur für Befehle, nicht für
+den Dateitransfer. OkHttp muss dafür zurück ins `machine`-Modul.
+
+**Noch offen:** `$SD/Status` liefert nur `SD card detected`, keinen Fortschritt. Für die
+Fortschrittsanzeige ist das `SD`-Feld im normalen `?`-Statusbericht zu prüfen – das geht nur
+während eines echten Laufs.
+
+### Teil 2 steht: Notizliste (2026-08-03)
+
+Room speichert `NoteEntity` (Text + Schriftbild), das DAO liegt hinter einem eigenen
+Interface, damit alles ohne Emulator prüfbar bleibt – dasselbe Muster wie `FakeFluidNc`.
+Die gesamte Logik (Titel, Umwandlung, Erben) sitzt in reinen Funktionen in `NoteLogik.kt`.
+
+Festgelegt vom Nutzer: **Blattformat, Rand und Papier-Offset gehören NICHT zur Notiz**,
+sondern gelten global – das Papier liegt auf dem Tisch, nicht im Dokument. Ein abweichendes
+Format darf erst bei den **Vorlagen (Teil 3)** mitkommen; das ist der richtige Ort dafür,
+weil eine Grußkarte ihr Format mitbringt, eine Notiz aber nicht.
+
+**Am Gerät gefundener Fehler, den kein Test zeigen konnte:** Die App öffnete nach einem
+Neustart eine andere Notiz als die zuletzt sichtbare. Die offene Notiz war aus den
+Zeitstempeln erschlossen – beim Wechseln wird aber die *verlassene* Notiz gespeichert und
+trägt danach die neuere Zeit. Sie wird jetzt gemerkt (`offeneNotizId` in den Einstellungen).
+Merksatz: „zuletzt bearbeitet" ist nicht „zuletzt angesehen".
+
+Entwurfsentscheidung (2026-08-03): **zwei getrennte Knöpfe** – „Auf SD senden" und „Direkt
+senden". Beide durchlaufen dasselbe `preflight`; der SD-Weg bekommt keine zweite
+Sicherheitslogik.
+
+### Teil 1 gebaut (2026-08-03) – 168 Tests grün
+
+`SdTransfer`/`HttpSdTransfer` (Upload), `SdSender` (Upload → `$SD/Run=` → Statusverfolgung),
+`MachineController.plotViaSd`, zwei Knöpfe im Editor. **Ohne neue Abhängigkeit**:
+`HttpURLConnection` statt OkHttp – für einen multipart-POST wäre eine Bibliothek
+unverhältnismäßig, zumal OkHttp hier schon einmal entfernt wurde.
+
+Drei Regeln, die als Test festgehalten sind:
+1. Schlägt der Upload fehl, wird **nichts** gestartet – sonst liefe die Datei vom letzten Mal.
+2. Kein stiller Rückfall von SD auf Telnet – bei zwei Knöpfen muss sichtbar sein, welcher lief.
+3. Homing-Pflicht und Grenzprüfung gelten für beide Wege (gemeinsames `preflight`).
+
+Gegen die echte Firmware geprüft: der selbstgebaute multipart-Rumpf wird angenommen, die Datei
+kommt mit exakter Größe an (`LivePlotterTest`, räumt hinterher auf).
+
+**Der SD-Prozentwert ist der Lesefortschritt, nicht der Bewegungsfortschritt.** Am Gerät
+gemessen: bei einer kleinen Datei steht sofort `SD:100.00`, während die Achse noch fährt. Das
+Ende wird deshalb am Zustandswechsel `Run` → `Idle` erkannt.
+
+### Noch offen bei Teil 1
+
+**Erledigt am 2026-08-03:** Der vollständige Plot über SD lief auf Papier durch – „Hallo von
+der SD-Karte", A6 quer, 396 Zeilen, 28 Hübe, 55 s, `Completed`, Endzustand sauber auf dem
+Arbeitsnullpunkt mit angehobenem Stift. Der Fortschritt lief dabei sichtbar mit (4 % → 100 %):
+bei einer Datei dieser Größe hinkt der Lesefortschritt nicht mehr auf 100 % fest wie bei der
+37-Byte-Probe.
+
+Wiederholbar mit `./gradlew :machine:test -PplotterHost=<ip> -PplotterPlot=true`
+(`LivePlotTest`). Das zweite Flag ist Absicht: `-PplotterHost` allein startet nur die lesenden
+Fälle, ein Test der den Stift aufsetzt darf nicht versehentlich mitlaufen.
 
 ## Bekannte offene Punkte
 
@@ -133,16 +282,8 @@ Notizliste mit Room, Vorlagen mit Platzhaltern, gemischte Stile je Absatz, Uploa
   nicht ungefragt anfangen. Beim Entfernen: `Fonts.kt`, die SVG-Datei unter
   `core/src/main/resources/fonts/`, die Nennung im README; gespeicherte `fontId`s laufen über
   den vorhandenen Rückfall in `Fonts.entry` auf die Vorgabe, es bricht also nichts.
-- **Die App kennt die Untergrenze der Achsen nicht.** Sie nimmt den fahrbaren Bereich als
-  `[0, workArea]` an; wahr ist `[mpos_mm, mpos_mm + max_travel]`. Solange der Arbeitsnullpunkt
-  auf oder über der Untergrenze liegt, rechnet die Prüfung konservativ und damit sicher – sie
-  verschenkt nur ein paar Millimeter. Sauber wäre, `$/axes/x` und `$/axes/y` auszulesen. Der
-  Nutzer hat das am 2026-08-02 bewusst zurückgestellt („lass es erstmal so").
-- **Die Zeitschätzung liegt rund 25 % zu niedrig.** Gemessen: 15 min statt geschätzter 11:20.
-  Ursache ist in den Messwerten belegt – der tatsächliche Vorschub schwankte zwischen 157 und
-  1.804 mm/min, weil die Maschine bei den kurzen Segmenten einer Schreibschrift den
-  Sollvorschub selten erreicht. `estimateSeconds` rechnet ohne Beschleunigungsrampen. Ein
-  Korrekturfaktor wäre eine Einzeilenänderung in `GCodeGenerator.kt`.
+- ~~Untergrenze der Achsen~~ und ~~Zeitschätzung~~ sind am 2026-08-03 gebaut, aber noch nicht
+  an der Maschine geprüft. Siehe den Stand-Abschnitt oben.
 - Keine automatische Silbentrennung (bewusst): Sie bräuchte Sprachwissen und läge bei
   zusammengesetzten Wörtern regelmäßig daneben. Stattdessen wirkt ein vom Nutzer gesetzter
   Bindestrich als Trennstelle, und hart getrennte Wörter werden im Editor rot markiert.

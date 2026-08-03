@@ -21,6 +21,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import de.emmpunkt.write.core.font.Fonts
 import de.emmpunkt.write.core.layout.Align
 import de.emmpunkt.write.data.AppSettings
+import de.emmpunkt.write.data.NoteEntity
 import de.emmpunkt.write.data.PaperPresets
 import de.emmpunkt.write.machine.SendProgress
 import java.util.Locale
@@ -68,10 +70,17 @@ fun EditorScreen(
     onSettingsCommit: () -> Unit,
     onAutoFit: () -> Unit,
     onPlot: () -> Unit,
+    onPlotViaSd: () -> Unit,
     onStop: () -> Unit,
+    notizen: List<NoteEntity>,
+    aktuelleNotizId: Long,
+    onNotizOeffnen: (Long) -> Unit,
+    onNotizAnlegen: () -> Unit,
+    onNotizLoeschen: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showTravel by remember { mutableStateOf(false) }
+    var listeOffen by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -80,6 +89,29 @@ fun EditorScreen(
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = { listeOffen = !listeOffen }) {
+                Text(if (listeOffen) "Notizen schließen" else "Notizen (${notizen.size})")
+            }
+            TextButton(onClick = onNotizAnlegen) { Text("+ Neu") }
+        }
+
+        if (listeOffen) {
+            NotizListe(
+                notizen = notizen,
+                aktuelleId = aktuelleNotizId,
+                onOeffnen = {
+                    onNotizOeffnen(it)
+                    listeOffen = false
+                },
+                onLoeschen = onNotizLoeschen,
+            )
+        }
+
         OutlinedTextField(
             value = text,
             onValueChange = onTextChange,
@@ -108,35 +140,50 @@ fun EditorScreen(
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         ) {
             Column {
+                // Der Ansichtsschalter steht ueber dem Bild und nicht daneben: unter der
+                // Vorschau teilte er sich die Zeile mit den Kennzahlen, die mit der Textmenge
+                // waechst - eins von beidem brach dann immer um. Als Overlay in der Bildecke
+                // ginge es auch nicht, weil das Blatt je nach Format bis an den Rand reicht.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, end = 12.dp, top = 4.dp),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    FilterChip(
+                        selected = showTravel,
+                        onClick = { showTravel = !showTravel },
+                        label = { Text("Leerfahrten", maxLines = 1, softWrap = false) },
+                    )
+                }
                 PreviewCanvas(
                     strokes = document.laidOut?.strokes.orEmpty(),
                     frame = settings.toFrame(),
                     modifier = Modifier.height(200.dp),
                     showTravel = showTravel,
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = document.job?.let { job ->
-                            val zeit = job.estimatedSeconds.roundToInt()
-                            val dauer = if (zeit >= 60) "${zeit / 60} min ${zeit % 60} s" else "$zeit s"
-                            "%.0f mm Strich · %d Hübe · ca. %s".format(
-                                Locale.GERMANY, job.drawLengthMm, job.penDownCount, dauer,
-                            )
-                        } ?: "Noch kein Text",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    TextButton(onClick = { showTravel = !showTravel }) {
-                        Text(if (showTravel) "Wege aus" else "Wege")
-                    }
-                }
+                Text(
+                    text = document.job?.let { job ->
+                        val zeit = job.estimatedSeconds.roundToInt()
+                        val dauer = if (zeit >= 60) {
+                            "%d:%02d".format(Locale.GERMANY, zeit / 60, zeit % 60)
+                        } else {
+                            "$zeit s"
+                        }
+                        "%.0f mm · %d Hübe · ca. %s".format(
+                            Locale.GERMANY, job.drawLengthMm, job.penDownCount, dauer,
+                        )
+                    } ?: "Noch kein Text",
+                    style = MaterialTheme.typography.bodySmall,
+                    // Volle Breite, seit der Schalter nicht mehr daneben sitzt.
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                )
             }
         }
 
-        SendeBereich(machine, document, onPlot, onStop)
+        SendeBereich(machine, document, onPlot, onPlotViaSd, onStop)
     }
 }
 
@@ -371,10 +418,13 @@ private fun SendeBereich(
     machine: MachineUiState,
     document: DocumentState,
     onPlot: () -> Unit,
+    onPlotViaSd: () -> Unit,
     onStop: () -> Unit,
 ) {
     val progress = machine.progress
     val laeuft = machine.busy && (progress is SendProgress.Running || progress is SendProgress.Started)
+    val bereit = machine.connected && !machine.busy && document.job != null &&
+        (document.job.penDownCount > 0)
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (laeuft && progress is SendProgress.Running) {
@@ -383,23 +433,43 @@ private fun SendeBereich(
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
-                "Zeile ${progress.ackedLines} von ${progress.totalLines}",
+                if (machine.sdLauf) {
+                    // Ehrlich beschriften: der Wert kommt aus dem Lesefortschritt der Datei
+                    // und eilt der Bewegung voraus - am Geraet nachgemessen.
+                    "Läuft von SD-Karte, etwa ${(progress.fraction * 100).toInt()} % gelesen"
+                } else {
+                    "Zeile ${progress.ackedLines} von ${progress.totalLines}"
+                },
                 style = MaterialTheme.typography.bodySmall,
             )
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                onClick = onPlot,
-                enabled = machine.connected && !machine.busy && document.job != null &&
-                    (document.job.penDownCount > 0),
+                onClick = onPlotViaSd,
+                enabled = bereit,
                 modifier = Modifier.weight(1f),
             ) {
-                Text("An Plotter senden")
+                Text("Auf SD senden")
+            }
+            OutlinedButton(
+                onClick = onPlot,
+                enabled = bereit,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Direkt senden")
             }
             if (laeuft) {
                 OutlinedButton(onClick = onStop) { Text("Not-Halt") }
             }
+        }
+
+        if (bereit) {
+            Text(
+                "Über SD läuft der Auftrag weiter, auch wenn die Verbindung abreißt. " +
+                    "Direkt gesendet muss das Handy in Reichweite bleiben.",
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
 
         if (!machine.connected) {

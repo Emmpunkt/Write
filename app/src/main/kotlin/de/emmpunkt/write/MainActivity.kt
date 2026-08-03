@@ -67,6 +67,8 @@ fun WriteApp(viewModel: PlotterViewModel = viewModel()) {
         val text by viewModel.text.collectAsStateWithLifecycle()
         val document by viewModel.document.collectAsStateWithLifecycle()
         val machine by viewModel.machine.collectAsStateWithLifecycle()
+        val notizen by viewModel.notizen.collectAsStateWithLifecycle()
+        val aktuelleNotizId by viewModel.aktuelleNotizId.collectAsStateWithLifecycle()
 
         // Bildschirm anlassen, solange ein Auftrag laeuft. Das ist die wirksamste Massnahme
         // gegen abbrechende Verbindungen: bei wachem Bildschirm drosselt Android das WLAN
@@ -112,7 +114,13 @@ fun WriteApp(viewModel: PlotterViewModel = viewModel()) {
                     onSettingsCommit = viewModel::commitSettings,
                     onAutoFit = viewModel::autoFit,
                     onPlot = viewModel::plot,
+                    onPlotViaSd = viewModel::plotViaSd,
                     onStop = viewModel::cancelPlot,
+                    notizen = notizen,
+                    aktuelleNotizId = aktuelleNotizId,
+                    onNotizOeffnen = viewModel::notizOeffnen,
+                    onNotizAnlegen = viewModel::notizAnlegen,
+                    onNotizLoeschen = viewModel::notizLoeschen,
                     modifier = Modifier.padding(innerPadding),
                 )
 
