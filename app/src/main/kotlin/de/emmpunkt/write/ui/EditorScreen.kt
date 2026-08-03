@@ -68,6 +68,7 @@ fun EditorScreen(
     onSettingsCommit: () -> Unit,
     onAutoFit: () -> Unit,
     onPlot: () -> Unit,
+    onPlotViaSd: () -> Unit,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -136,7 +137,7 @@ fun EditorScreen(
             }
         }
 
-        SendeBereich(machine, document, onPlot, onStop)
+        SendeBereich(machine, document, onPlot, onPlotViaSd, onStop)
     }
 }
 
@@ -371,10 +372,13 @@ private fun SendeBereich(
     machine: MachineUiState,
     document: DocumentState,
     onPlot: () -> Unit,
+    onPlotViaSd: () -> Unit,
     onStop: () -> Unit,
 ) {
     val progress = machine.progress
     val laeuft = machine.busy && (progress is SendProgress.Running || progress is SendProgress.Started)
+    val bereit = machine.connected && !machine.busy && document.job != null &&
+        (document.job.penDownCount > 0)
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (laeuft && progress is SendProgress.Running) {
@@ -383,23 +387,43 @@ private fun SendeBereich(
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
-                "Zeile ${progress.ackedLines} von ${progress.totalLines}",
+                if (machine.sdLauf) {
+                    // Ehrlich beschriften: der Wert kommt aus dem Lesefortschritt der Datei
+                    // und eilt der Bewegung voraus - am Geraet nachgemessen.
+                    "Läuft von SD-Karte, etwa ${(progress.fraction * 100).toInt()} % gelesen"
+                } else {
+                    "Zeile ${progress.ackedLines} von ${progress.totalLines}"
+                },
                 style = MaterialTheme.typography.bodySmall,
             )
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                onClick = onPlot,
-                enabled = machine.connected && !machine.busy && document.job != null &&
-                    (document.job.penDownCount > 0),
+                onClick = onPlotViaSd,
+                enabled = bereit,
                 modifier = Modifier.weight(1f),
             ) {
-                Text("An Plotter senden")
+                Text("Auf SD senden")
+            }
+            OutlinedButton(
+                onClick = onPlot,
+                enabled = bereit,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Direkt senden")
             }
             if (laeuft) {
                 OutlinedButton(onClick = onStop) { Text("Not-Halt") }
             }
+        }
+
+        if (bereit) {
+            Text(
+                "Über SD läuft der Auftrag weiter, auch wenn die Verbindung abreißt. " +
+                    "Direkt gesendet muss das Handy in Reichweite bleiben.",
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
 
         if (!machine.connected) {

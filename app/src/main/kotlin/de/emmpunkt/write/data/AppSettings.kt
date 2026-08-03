@@ -75,6 +75,13 @@ data class AppSettings(
         const val SCHRIFTGROESSE_MAX_MM = 25f
     }
 
+    /**
+     * Das Profil aus den gespeicherten Einstellungen.
+     *
+     * Achtung: Verfahrweg, Beschleunigungen und Vorschubgrenzen darin sind nur ein RUECKFALL
+     * fuer den Fall, dass keine Verbindung steht. Sobald eine Maschine verbunden ist, gilt
+     * `applying(limits)` - was sie ueber sich meldet, schlaegt jeden gespeicherten Wert.
+     */
     fun toMachineProfile() = MachineProfile(
         zUpMm = zUpMm,
         zDownMm = zDownMm,

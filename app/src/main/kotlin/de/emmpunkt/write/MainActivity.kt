@@ -112,6 +112,7 @@ fun WriteApp(viewModel: PlotterViewModel = viewModel()) {
                     onSettingsCommit = viewModel::commitSettings,
                     onAutoFit = viewModel::autoFit,
                     onPlot = viewModel::plot,
+                    onPlotViaSd = viewModel::plotViaSd,
                     onStop = viewModel::cancelPlot,
                     modifier = Modifier.padding(innerPadding),
                 )

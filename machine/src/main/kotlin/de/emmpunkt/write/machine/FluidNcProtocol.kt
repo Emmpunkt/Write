@@ -46,11 +46,36 @@ data class Position(val x: Float, val y: Float, val z: Float) {
  * [work] ist die Position im Arbeitskoordinatensystem - also die Zahl, die den Nutzer
  * interessiert, weil sie sich auf seinen Nullpunkt bezieht.
  */
+/**
+ * Der SD-Lauf, den der Statusbericht als `SD:100.00,/sd/datei.nc` meldet.
+ *
+ * ACHTUNG, am 2026-08-03 am Geraet nachgemessen: [percent] ist der LESEfortschritt der Datei,
+ * nicht der Bewegungsfortschritt. Bei einer kleinen Datei steht sofort 100 %, waehrend die
+ * Achse noch faehrt - FluidNC liest voraus. Als Fortschrittsbalken taugt der Wert deshalb nur
+ * bei grossen Dateien, und auch dort eilt er der Wirklichkeit voraus.
+ *
+ * Verlaesslich ist allein der Zustand: solange [MachineState.RUN] gemeldet wird, laeuft der
+ * Auftrag; der Wechsel nach [MachineState.IDLE] ist das Ende.
+ */
+data class SdRun(val percent: Float, val path: String) {
+    companion object {
+        fun parse(value: String): SdRun? {
+            val komma = value.indexOf(',')
+            if (komma <= 0) return null
+            val prozent = value.substring(0, komma).trim().toFloatOrNull() ?: return null
+            val pfad = value.substring(komma + 1).trim()
+            return if (pfad.isEmpty()) null else SdRun(prozent, pfad)
+        }
+    }
+}
+
 data class MachineStatus(
     val state: MachineState,
     val machine: Position?,
     val work: Position?,
     val raw: String,
+    /** Gesetzt, solange ein Auftrag von der SD-Karte laeuft. */
+    val sdRun: SdRun? = null,
 ) {
     companion object {
         val UNKNOWN = MachineStatus(MachineState.UNKNOWN, null, null, "")
@@ -99,6 +124,7 @@ class StatusParser {
         val state = MachineState.parse(fields[0])
         var machine: Position? = null
         var work: Position? = null
+        var sdRun: SdRun? = null
 
         for (field in fields.drop(1)) {
             val name = field.substringBefore(':')
@@ -107,6 +133,7 @@ class StatusParser {
                 "MPos" -> machine = Position.parse(value)
                 "WPos" -> work = Position.parse(value)
                 "WCO" -> Position.parse(value)?.let { lastWorkCoordinateOffset = it }
+                "SD" -> sdRun = SdRun.parse(value)
             }
         }
 
@@ -116,11 +143,34 @@ class StatusParser {
             lastWorkCoordinateOffset?.let { work = machine - it }
         }
 
-        return MachineStatus(state, machine, work, trimmed)
+        return MachineStatus(state, machine, work, trimmed, sdRun)
     }
 
     fun reset() {
         lastWorkCoordinateOffset = null
+    }
+}
+
+/** Ein Eintrag der SD-Karte, wie `$SD/List` ihn meldet. */
+data class SdFile(val name: String, val sizeBytes: Int) {
+    companion object {
+        /**
+         * Zerlegt `[FILE: Ruler Test.nc|SIZE:59263]`.
+         *
+         * Der Dateiname darf Leerzeichen enthalten - auf der Karte des Nutzers ist das die
+         * Regel, nicht die Ausnahme. Deshalb wird am letzten `|SIZE:` getrennt und nicht am
+         * ersten Leerzeichen.
+         */
+        fun parse(line: String): SdFile? {
+            val t = line.trim()
+            if (!t.startsWith("[FILE:") || !t.endsWith("]")) return null
+            val rumpf = t.removePrefix("[FILE:").removeSuffix("]")
+            val trenn = rumpf.lastIndexOf("|SIZE:")
+            if (trenn < 0) return null
+            val name = rumpf.substring(0, trenn).trim()
+            val size = rumpf.substring(trenn + "|SIZE:".length).trim().toIntOrNull() ?: return null
+            return if (name.isEmpty()) null else SdFile(name, size)
+        }
     }
 }
 
@@ -173,6 +223,23 @@ object Commands {
     const val UNLOCK = "\$X"
     const val SETTINGS = "\$\$"
     const val BUILD_INFO = "\$I"
+
+    /**
+     * Startet eine Datei von der SD-Karte.
+     *
+     * Ab hier arbeitet die Maschine allein - der Auftrag ueberlebt einen Verbindungsabbruch.
+     * Der Not-Halt bleibt trotzdem erreichbar, solange die Verbindung steht: Realtime-Zeichen
+     * umgehen den Zeilenpuffer.
+     */
+    fun sdRun(path: String) = "\$SD/Run=${absolut(path)}"
+
+    fun sdDelete(path: String) = "\$SD/Delete=${absolut(path)}"
+
+    const val SD_LIST = "\$SD/List"
+    const val SD_STATUS = "\$SD/Status"
+
+    /** FluidNC erwartet den fuehrenden Schraegstrich; am Geraet nachgeprueft. */
+    private fun absolut(path: String) = if (path.startsWith("/")) path else "/$path"
 
     /**
      * Setzt den Arbeitsnullpunkt auf die aktuelle Position (G10 L20 P0).

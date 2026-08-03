@@ -4,7 +4,9 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import de.emmpunkt.write.core.font.Fonts
+import de.emmpunkt.write.core.gcode.MachineLimits
 import de.emmpunkt.write.core.gcode.PlotJob
+import de.emmpunkt.write.core.gcode.applying
 import de.emmpunkt.write.core.gcode.toPlotJob
 import de.emmpunkt.write.core.layout.LaidOutText
 import de.emmpunkt.write.core.layout.fitSize
@@ -14,8 +16,10 @@ import de.emmpunkt.write.data.AppSettings
 import de.emmpunkt.write.data.PlotWakeLock
 import de.emmpunkt.write.data.SettingsRepository
 import de.emmpunkt.write.machine.Axis
+import de.emmpunkt.write.machine.HttpSdTransfer
 import de.emmpunkt.write.machine.MachineController
 import de.emmpunkt.write.machine.MachineStatus
+import de.emmpunkt.write.machine.SdTransfer
 import de.emmpunkt.write.machine.SendProgress
 import de.emmpunkt.write.machine.TelnetTransport
 import de.emmpunkt.write.machine.Transport
@@ -48,6 +52,14 @@ data class MachineUiState(
     val busy: Boolean = false,
     val progress: SendProgress? = null,
     val message: String? = null,
+    /**
+     * Ob der laufende Auftrag von der SD-Karte kommt.
+     *
+     * Bei zwei Sendewegen muss sichtbar sein, welcher lief - sonst deutet der Nutzer eine
+     * Stoerung falsch. Wirkt sich auch auf die Fortschrittsanzeige aus: der SD-Prozentwert
+     * ist der Lesefortschritt der Datei und eilt der Bewegung voraus.
+     */
+    val sdLauf: Boolean = false,
 )
 
 class PlotterViewModel(app: Application) : AndroidViewModel(app) {
@@ -69,6 +81,21 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
 
     private var controller: MachineController? = null
     private var transport: Transport? = null
+
+    /**
+     * Beschleunigung, wie die verbundene Maschine sie meldet - `null`, solange keine
+     * Verbindung stand. Bewusst nicht in den [AppSettings]: sie ist eine Eigenschaft des
+     * Plotters und nichts, was der Nutzer einstellt.
+     */
+    /**
+     * Was die verbundene Maschine ueber sich gemeldet hat.
+     *
+     * Bewusst NICHT in den [AppSettings]: das sind Eigenschaften des Geraets, keine
+     * Einstellungen. Ein gespeicherter Verfahrweg ueberlebt sonst eine Umkonfiguration oder
+     * wandert zu einem anderen Plotter mit - genau so entstand der Irrtum, die Untergrenze
+     * liege bei 3, waehrend sie ausgelesen bei 10 lag.
+     */
+    private var maschinenwerte: MachineLimits = MachineLimits.UNKNOWN
     private var plotJobHandle: Job? = null
     private var statusPollHandle: Job? = null
 
@@ -160,7 +187,7 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
         val result = runCatching {
             val font = Fonts.load(s.fontId)
             val laid = layoutText(_text.value, s.toTextStyle(), s.toFrame(), font)
-            val job = laid.toPlotJob(s.toMachineProfile())
+            val job = laid.toPlotJob(s.toMachineProfile().applying(maschinenwerte))
             DocumentState(
                 laidOut = laid,
                 job = job,
@@ -183,12 +210,29 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- Maschine ----
 
+    /**
+     * Der Upload-Weg zur SD-Karte, oder `null`, wenn keine Verbindungsdaten stehen.
+     *
+     * Laeuft ueber HTTP zur WebUI und damit auf einem anderen Port als der Telnet-Kanal - am
+     * Geraet geprueft: `POST /upload` funktioniert, obwohl `/command` `WebSocket dead` liefert.
+     */
+    private fun sdTransfer(): SdTransfer? {
+        val s = _settings.value
+        if (s.host.isBlank()) return null
+        return HttpSdTransfer(s.host)
+    }
+
     private fun buildController(): MachineController {
         val s = _settings.value
         transport?.let { runCatching { it.close() } }
         val t: Transport = TelnetTransport(s.host, s.telnetPort)
         transport = t
-        return MachineController(t, s.toMachineProfile()).also { controller = it }
+        // Bewusst ein Provider und keine Kopie: die Vorpruefung muss mit denselben Zahlen
+        // rechnen wie der G-Code, auch wenn waehrend der Verbindung etwas verstellt wird.
+        return MachineController(
+            t,
+            profileProvider = { _settings.value.toMachineProfile().applying(maschinenwerte) },
+        ).also { controller = it }
     }
 
     fun connect() = withMachine("Verbinden") {
@@ -299,11 +343,28 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Prueft den Auftrag und sendet ihn.
+     * Sendet den Auftrag Zeile fuer Zeile ueber Telnet.
      *
-     * Die Pruefung liegt im [MachineController]; hier wird nur angezeigt, was sie meldet.
+     * Die Verbindung muss dabei durchgehend stehen: reisst sie, bleibt der Stift mitten im
+     * Text auf dem Papier. Dagegen laufen die drei Wachhalte-Massnahmen.
      */
-    fun plot() {
+    fun plot() = sende(ueberSdKarte = false)
+
+    /**
+     * Legt den Auftrag als Datei auf der SD-Karte ab und startet ihn dort.
+     *
+     * Danach arbeitet die Maschine allein - ein Verbindungsabbruch bricht den Auftrag nicht
+     * mehr ab. Der Not-Halt bleibt erreichbar, solange die Verbindung steht.
+     */
+    fun plotViaSd() = sende(ueberSdKarte = true)
+
+    /**
+     * Prueft den Auftrag und sendet ihn auf dem gewaehlten Weg.
+     *
+     * Die Pruefung liegt im [MachineController] und ist fuer beide Wege dieselbe; hier wird
+     * nur angezeigt, was sie meldet.
+     */
+    private fun sende(ueberSdKarte: Boolean) {
         val c = controller
         val doc = _document.value
         val job = doc.job
@@ -321,19 +382,30 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
         // Die Vorpruefung bekommt die Zuege in Blatt-Koordinaten; den Papier-Offset rechnet
         // sie selbst dazu, damit sie genau die Koordinaten prueft, die spaeter gefahren werden.
         val blattStrokes = laid.strokes
+        val fluss = if (ueberSdKarte) {
+            c.plotViaSd(job, blattStrokes, sdTransfer())
+        } else {
+            c.plot(job, blattStrokes)
+        }
 
         plotJobHandle = viewModelScope.launch {
-            _machine.update { it.copy(busy = true, message = null, progress = null) }
-            // Waehrend des Auftrags duerfen Prozessor und WLAN nicht einschlafen.
+            _machine.update {
+                it.copy(busy = true, message = null, progress = null, sdLauf = ueberSdKarte)
+            }
+            // Waehrend des Auftrags duerfen Prozessor und WLAN nicht einschlafen. Beim
+            // SD-Weg genuegte streng genommen die Zeit des Uploads - aber solange die
+            // Fortschrittsanzeige mitlaeuft, wird die Verbindung weiter gebraucht.
             wakeLock.acquire()
             try {
-            c.plot(job, blattStrokes).collect { progress ->
+            fluss.collect { progress ->
                 _machine.update { state ->
                     state.copy(
                         progress = progress,
                         busy = progress is SendProgress.Started || progress is SendProgress.Running,
                         message = when (progress) {
-                            is SendProgress.Completed -> "Fertig geplottet"
+                            is SendProgress.Completed ->
+                                if (ueberSdKarte) "Fertig geplottet (von SD-Karte)"
+                                else "Fertig geplottet"
                             is SendProgress.Failed ->
                                 progress.message + if (progress.penLifted) " Stift angehoben." else
                                     " ACHTUNG: Stift konnte nicht angehoben werden."
@@ -376,6 +448,16 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
     private fun observeController(c: MachineController) {
         viewModelScope.launch {
             c.connected.collect { connected -> _machine.update { it.copy(connected = connected) } }
+        }
+        viewModelScope.launch {
+            // Die Maschine kennt ihre Grenzen besser als jede gespeicherte Vorgabe. Sobald
+            // sie gelesen sind, wird mit ihnen gerechnet statt mit den Einstellungen.
+            c.limits.collect { gelesen ->
+                if (gelesen != maschinenwerte) {
+                    maschinenwerte = gelesen
+                    recompute()
+                }
+            }
         }
     }
 

@@ -44,6 +44,21 @@ class FakeFluidNc(
      * in dem er unbekannt bleibt.
      */
     @Volatile var sendWco: Boolean = true,
+    /**
+     * Antwortblock auf `$/axes/x` und `$/axes/y`, Achsbuchstabe klein als Schluessel.
+     *
+     * Leer heisst: die Firmware kennt die Abfrage nicht und quittiert nur mit ok. Genau dann
+     * muss die App auf ihre Vorgabewerte zurueckfallen, statt die Verbindung aufzugeben.
+     */
+    @Volatile var axisConfig: Map<Char, List<String>> = emptyMap(),
+    /**
+     * Wie viele Statusabfragen ein per `$SD/Run=` gestarteter Auftrag lang laeuft.
+     *
+     * Bildet nach, was am Geraet zu sehen war: waehrend des Laufs meldet der Statusbericht
+     * `Run` und ein Feld `SD:<prozent>,<pfad>`, danach wieder `Idle`. Der Prozentwert steht
+     * dabei sofort auf 100 - er ist der Lesefortschritt der Datei, nicht der der Bewegung.
+     */
+    @Volatile var sdRunPolls: Int = 3,
 ) : Closeable {
 
     private val server = ServerSocket(0, 1, InetAddress.getLoopbackAddress())
@@ -68,6 +83,10 @@ class FakeFluidNc(
     @Volatile private var running = true
     @Volatile private var wurdeZurueckgesetzt = false
     private var worker: Thread? = null
+
+    /** Laufender SD-Auftrag: Pfad und wie viele Abfragen er noch dauert. */
+    @Volatile private var sdLaufPfad: String? = null
+    private val sdVerbleibend = AtomicInteger(0)
 
     init {
         worker = thread(isDaemon = true, name = "FakeFluidNc") {
@@ -144,6 +163,16 @@ class FakeFluidNc(
                         failAtLine > 0 && received.size >= failAtLine -> send("error:20")
                         rejectMovesAfterReset && wurdeZurueckgesetzt && cmd.startsWith("G0 Z") ->
                             send("error:9")
+                        cmd.startsWith("\$/axes/") -> {
+                            // Der Block kommt vor der Quittung, so wie bei der echten Firmware.
+                            axisConfig[cmd.last().lowercaseChar()]?.forEach { send(it) }
+                            send("ok")
+                        }
+                        cmd.startsWith("\$SD/Run=") -> {
+                            sdLaufPfad = cmd.removePrefix("\$SD/Run=")
+                            sdVerbleibend.set(sdRunPolls)
+                            send("ok")
+                        }
                         else -> send("ok")
                     }
                 }
@@ -161,13 +190,31 @@ class FakeFluidNc(
                     // sofort beantwortet, auch wenn noch Zeilen in der Warteschlange liegen.
                     c == Commands.STATUS_QUERY -> {
                         realtime += c
+                        // Ein laufender SD-Auftrag geht nach der eingestellten Zahl von
+                        // Abfragen zu Ende - so wie die echte Maschine irgendwann fertig ist.
+                        val laufend = sdLaufPfad
+                        val zustand = if (laufend != null) {
+                            if (sdVerbleibend.decrementAndGet() <= 0) {
+                                sdLaufPfad = null
+                                "Idle"
+                            } else {
+                                "Run"
+                            }
+                        } else {
+                            state
+                        }
+                        val sdFeld = if (laufend != null && zustand == "Run") {
+                            "|SD:100.00,$laufend"
+                        } else {
+                            ""
+                        }
                         synchronized(output) {
                             send(
                                 if (sendWco) {
-                                    "<$state|MPos:10.000,20.000,3.000|FS:0,0|" +
+                                    "<$zustand|MPos:10.000,20.000,3.000|FS:0,0$sdFeld|" +
                                         "WCO:${wco.first},${wco.second},${wco.third}>"
                                 } else {
-                                    "<$state|MPos:10.000,20.000,3.000|FS:0,0>"
+                                    "<$zustand|MPos:10.000,20.000,3.000|FS:0,0$sdFeld>"
                                 },
                             )
                         }

@@ -23,7 +23,7 @@ zweite Darstellung. Was auf dem Bildschirm steht, fährt der Stift.
 ## Bauen und installieren
 
 ```bash
-./gradlew test                 # 106 Tests, ohne Netz und ohne Gerät
+./gradlew test                 # 168 Tests, ohne Netz und ohne Gerät
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
@@ -41,17 +41,48 @@ Ergebnis in `core/build/preview/`):
 ./gradlew :core:test --tests '*PreviewSamplesTest*'
 ```
 
+## Maschinenwerte werden ausgelesen, nicht gepflegt
+
+Verfahrweg, Untergrenzen, Beschleunigungen und Vorschubgrenzen holt die App **beim Verbinden**
+aus `$/axes/x`, `/y` und `/z`. Nicht auf Knopfdruck: eine Abfrage, die man zu drücken vergessen
+kann, ist dieselbe Fehlerquelle wie ein fest eingetragener Wert — und sie kostet Millisekunden.
+
+Der Anlass ist belegt. Eine Notiz im Projekt nannte `mpos_mm: 3.0`; ausgelesen waren es 10. Die
+Konfiguration hatte sich geändert, ohne dass es auffiel. Derselbe Plotter kann morgen andere
+Werte haben, und ein anderer hat ohnehin andere.
+
+Die Trennlinie:
+
+| Kommt aus der Maschine | Bleibt Einstellung |
+|---|---|
+| Verfahrweg und Untergrenzen | Stifthöhen `Z_up`/`Z_down` (hängen am Stift, nicht am Gerät) |
+| Beschleunigungen (XY und Z getrennt) | Papier-Offset, Blattformat, Ränder |
+| Vorschub-**Obergrenzen** | Gewünschter Vorschub, bis zu dieser Grenze |
+
+Langsamer zu schreiben bleibt also deine Entscheidung; nur ein Wert **über** dem, was die
+Maschine kann, wird gekappt — sonst wäre bloß die Zeitschätzung zu optimistisch, denn die
+Firmware begrenzt ohnehin. Ohne Verbindung gelten die gespeicherten Werte als Rückfall, damit
+Vorschau und Grenzprüfung auch offline etwas Vernünftiges rechnen.
+
+Aus demselben Grund bekommt der `MachineController` sein Profil als Provider und nicht als
+Kopie: Verstellst du während bestehender Verbindung den Papier-Offset, entsteht der G-Code mit
+dem neuen Wert — die Vorprüfung muss dann mit demselben rechnen und nicht mit dem von vorhin.
+
 ## Der Plotter
 
-Ausgelesen am 2026-08-01 über Telnet, FluidNC v4.0.3 auf `192.168.2.18`:
+Ausgelesen am 2026-08-03 über Telnet, FluidNC v4.0.3 auf `192.168.2.18`. Die Werte stehen hier
+als Beispiel, nicht als Vorgabe – die App holt sie sich beim Verbinden selbst (siehe oben):
 
 | Größe | Wert | Folge für die App |
 |---|---|---|
-| Arbeitsbereich `$130`/`$131` | 155 × 105 mm | Vorgabe; Grenzprüfung vor jedem Auftrag |
+| Verfahrweg `$130`/`$131` | 155 × 105 mm | **ab dem Maschinennullpunkt**, nicht ab G54 |
+| Untergrenze `mpos_mm` (X, Y) | > 0, variabel | fahrbar ist `[mpos_mm, mpos_mm + max_travel]` |
 | Vorschub X/Y `$110`/`$111` | 1500 mm/min | Obergrenze für Schreiben und Leerfahrt |
 | Vorschub Z `$112` | 2000 mm/min | |
+| Beschleunigung `$120`/`$121` | 400 mm/s² | geht in die Zeitschätzung ein |
+| Beschleunigung Z `$122` | 200 mm/s² | **halb so groß wie XY** – nicht gleichsetzen |
 | Soft Limits `$20` | aktiv | Ein zu großer Auftrag löst Alarm aus – die Vorprüfung fängt ihn vorher ab |
-| Homing `$22` | aktiv | `$H` verfügbar |
+| Homing `$22` | aktiv (nur X/Y) | `$H` verfügbar; Z hat `soft_limits: false` |
 | Statusbericht `$10=1` | MPos; WCO nur **periodisch**, nicht in jedem Bericht | Der Parser merkt sich den letzten Versatz; `$#` beim Verbinden liefert ihn sofort statt erst nach Sekunden |
 
 Nachgerechnet und verifiziert: `[G54:11.000,22.000,-10.750]` und `MPos Z −6.750`
@@ -60,6 +91,26 @@ ergeben `Zw = 4.000 mm`.
 Die Z-Achse hat **keinen Endschalter** und bleibt beim Homing außen vor. Ihr Nullpunkt entsteht
 allein über „Z hier nullen"; nach einem Neustart der Steuerung liegt die Maschinenkoordinate
 dort auf 0, wo die Achse gerade steht, und muss neu gesetzt werden.
+
+### Der fahrbare Bereich beginnt nicht bei null
+
+`$130`/`$131` sind der Verfahrweg **ab dem Maschinennullpunkt**, nicht ab dem Arbeitsnullpunkt.
+In `$/axes/x` und `$/axes/y` steht bei negativer Referenzfahrt ein `mpos_mm` > 0 – nach dem
+Homing steht die Maschine genau dort, und weiter zurück geht es nicht. Fahrbar ist
+`[mpos_mm, mpos_mm + max_travel]`.
+
+Die App liest deshalb beim Verbinden `$/axes/x`, `$/axes/y` und `$/axes/z` aus und rechnet mit
+dem echten Bereich. Kennt eine Firmware die Abfrage nicht, fällt sie auf die frühere Annahme
+`[0, $130]` zurück: die irrt in die sichere Richtung, solange der Arbeitsnullpunkt über der
+wahren Untergrenze liegt, und verschenkt dann nur ein paar Millimeter.
+
+Warum das keine Kosmetik ist: **Der Arbeitsnullpunkt muss auf oder über dieser Untergrenze
+liegen.** Lag er darunter, löste jeder Auftrag ALARM:2 aus – mitten in der Bewegung, mit halb
+beschriebenem Blatt, und die alte Prüfung gegen `[0, $130]` hätte ihn anstandslos
+durchgelassen. Betroffen ist auch die Rückfahrt `G0 X0 Y0` am Ende jedes Auftrags: dort liegt
+kein Strich, gefahren wird trotzdem. Beides prüft die App jetzt.
+
+Aus derselben Abfrage kommt `acceleration_mm_per_sec2` – siehe „Wie lange dauert das?".
 
 ## Schriften
 
@@ -139,13 +190,75 @@ Die Breitenmessung dabei berücksichtigt die Neigung nicht – bei starker Neigu
 Schrift deshalb seitlich etwas über den eingestellten Rand hinausragen; bei kräftiger Neigung
 lohnt sich also ein größerer Rand.
 
-## Warum nur Telnet
+## Wie lange dauert das?
+
+Die Schätzung vor dem Senden rechnet **mit Beschleunigungsrampen**, nicht mit `Weg / Vorschub`.
+Der Unterschied ist nicht akademisch: ohne sie lag die Angabe rund ein Viertel zu niedrig
+(gemessen 15 Minuten, geschätzt 11:20). In den Messwerten steht auch, warum – der tatsächliche
+Vorschub schwankte zwischen 157 und 1.804 mm/min, weil die Maschine bei den kurzen Segmenten
+einer Schreibschrift den Sollvorschub selten erreicht.
+
+Gerechnet wird deshalb Bewegung für Bewegung: jeder Strichzug und jede Leerfahrt beginnt aus
+dem Stand und endet im Stand, denn dazwischen wird der Stift gehoben und gesenkt. Reicht die
+Strecke für den Sollvorschub, ist es ein Trapez (`s/v + v/a`); reicht sie nicht, ein Dreieck
+(`2·√(s/a)`) – und dieser zweite Fall ist bei einer Schreibschrift die Mehrheit.
+
+Die Beschleunigung kommt aus der verbundenen Maschine – **getrennt für XY und Z**, weil sie
+sich unterscheiden (gemessen: 400 gegenüber 200 mm/s²). Wer beides gleichsetzt, verrechnet sich
+bei den Stifthüben, und davon hat ein Auftrag Hunderte. Ohne Verbindung gilt ein Vorgabewert;
+die Schätzung ist dann ungenauer, aber nichts wird dadurch unsicher.
+
+Ein pauschaler Korrekturfaktor wäre der falsche Weg gewesen: er träfe den langen Strich genauso
+wie den kurzen, obwohl der Fehler nur bei den kurzen entsteht.
+
+**Was noch fehlt:** Mit der echten Beschleunigung bringt das Modell +11 %, gemessen fehlten
++32 %. Es erklärt also nur ein Drittel der Lücke. Der Rest steckt vermutlich in der Junction
+Deviation, die hier außen vor bleibt: `rampSeconds` nimmt an, der Planer fahre einen Strichzug
+ohne Zwischenstopp durch, während FluidNC an jeder scharfen Ecke abbremst. Die Schätzung ist
+damit weiterhin eher knapp als zu großzügig.
+
+## Zwei Wege zum Plotter
+
+| | **Auf SD senden** | **Direkt senden** |
+|---|---|---|
+| Weg | `POST /upload`, dann `$SD/Run=` | Zeile für Zeile über Telnet |
+| Verbindungsabbruch | Auftrag läuft weiter | Stift bleibt auf dem Papier stehen |
+| Fortschritt | grob (siehe unten) | Zeile für Zeile, genau |
+| Not-Halt | erreichbar, solange die Verbindung steht | erreichbar |
+
+Beide durchlaufen **dasselbe `preflight`** — Grenzprüfung, Homing-Pflicht und Idle-Zustand
+sitzen an einer Stelle im `MachineController`. Ein zweiter Sendeweg mit eigener, womöglich
+lückenhafter Sicherheitslogik wäre genau die Abkürzung, die später ein Blatt kostet.
+
+Schlägt der Upload fehl, wird **nichts** gestartet. Sonst plottete die Maschine die Datei vom
+letzten Mal — also einen anderen Text. Und es gibt keinen stillen Rückfall von SD auf Telnet:
+bei zwei Knöpfen muss sichtbar bleiben, welcher Weg lief.
+
+Die Datei heißt immer `/write.nc` und wird überschrieben. Eine Historie auf der Karte bräuchte
+Verwaltung, die niemand will — der Text liegt ohnehin in der App.
+
+### Warum der SD-Fortschritt grob ist
+
+Am Gerät nachgemessen: Das Feld `SD:<prozent>` im Statusbericht ist der **Lesefortschritt der
+Datei**, nicht der der Bewegung. Bei einer kleinen Datei steht dort sofort 100 %, während die
+Achse noch fährt — FluidNC liest voraus. Der Wert wird trotzdem angezeigt (bei einem vollen
+Blatt ist er die einzige Zahl, die es gibt), aber das **Ende** erkennt die App am
+Zustandswechsel `Run` → `Idle` und nicht am Prozentwert.
+
+## Warum nur Telnet für Befehle
 
 Die Weboberfläche nimmt Befehle unter `/command` zwar entgegen, liefert die Antworten aber über
 ihren WebSocket aus – eine reine HTTP-Anfrage beantwortet sie mit `WebSocket dead`. Ein
-HTTP-Transport wäre damit ohne eigene WebSocket-Anbindung wertlos und für einen Auftrag
-ohnehin zu langsam, weil jede Zeile einen eigenen Umlauf bräuchte. Telnet auf Port 23 kann
-alles, was die App benötigt; der HTTP-Weg wurde deshalb wieder entfernt (samt OkHttp).
+HTTP-Transport für **Befehle** wäre damit ohne eigene WebSocket-Anbindung wertlos und für einen
+Auftrag ohnehin zu langsam, weil jede Zeile einen eigenen Umlauf bräuchte. Telnet auf Port 23
+kann alles, was die App an Befehlen benötigt.
+
+**Für Dateien gilt das nicht.** Am 2026-08-03 nachgeprüft: `POST /upload` antwortet mit 200 und
+legt die Datei korrekt ab, obwohl `/command` weiterhin `WebSocket dead` liefert. Der frühere
+Schluss „HTTP ist bei diesem Gerät wertlos" galt also nur für Befehle. Der Upload läuft
+deshalb über HTTP – mit `HttpURLConnection` aus dem JDK und **ohne** neue Abhängigkeit: für
+einen einzigen multipart-POST wäre eine Bibliothek unverhältnismäßig, zumal OkHttp aus diesem
+Projekt schon einmal entfernt wurde.
 
 ## Wach bleiben während eines Auftrags
 
@@ -206,12 +319,17 @@ Der Code steht unter der MIT-Lizenz (siehe `LICENSE`).
 ## Stand
 
 **Etappe 1 steht:** Schrift, Textsatz, G-Code, Vorschau, Streaming, Jog/Homing/Nullen,
-Einstellungen. 86 Tests grün, APK gebaut und auf dem Gerät installiert. Die App verbindet
-sich mit dem Plotter und zeigt Zustand und Position korrekt an (verifiziert am 2026-08-01).
+Einstellungen. Am echten Gerät und an der echten Maschine verifiziert: der Dauertest schrieb
+A6 quer, 3.480 mm Strich in 790 Pen-Down-Zyklen, rund 15 Minuten ohne Abbruch oder Alarm, und
+endete sauber auf dem Arbeitsnullpunkt mit angehobenem Stift (2026-08-02).
 
 - **Etappe 2a steht:** Einpassen und die vier Feintuning-Regler.
 - **Etappe 2b steht:** vier verbundene SVG-Schreibschriften, Hershey-Kalligrafie entfernt.
-- **Etappe 3:** Notizliste, Vorlagen mit Platzhaltern, gemischte Stile, Upload auf SD.
+  Am 2026-08-02 an der Maschine geschrieben.
+- **Etappe 3, Teil 1 steht:** Upload auf die SD-Karte, zwei getrennte Sendewege.
+- **Etappe 3, offen:** Notizliste, Vorlagen mit Platzhaltern, gemischte Stile je Absatz.
+
+168 Tests grün, alle ohne Netz und ohne Gerät.
 
 Hinweis zur Installation: Über USB brach die Übertragung reproduzierbar ab (Gerät ging
 mitten im Streamed Install offline). Über WLAN läuft sie zuverlässig:
@@ -224,5 +342,9 @@ adb -s <handy-ip>:5555 install -r app/build/outputs/apk/debug/app-debug.apk
 Noch offen:
 - Die Z-Achse hat keinen Endschalter und wird nicht referenziert. Ihr Nullpunkt entsteht nur
   über „Z hier nullen" und ist nach einem Neustart der Steuerung erneut zu setzen.
-- **Die neuen SVG-Schriften wurden noch nicht am Gerät bedient und noch nicht an der Maschine
-  erprobt.** Das Probeblatt in Allure bei 25 mm, das den Anschluss zeigen soll, steht noch aus.
+- **Der Arbeitsnullpunkt des Geräts passt nicht zum fahrbaren Bereich** (G54 auf Maschine 3,
+  Untergrenze 10). Entweder G54 neu setzen oder durchgehend mit Rand ≥ 7 mm arbeiten. Die
+  Grenzprüfung fängt es ab, statt es in den Alarm laufen zu lassen.
+- Die Zeitschätzung liegt weiterhin zu niedrig, nur weniger als vorher – siehe „Wie lange
+  dauert das?".
+- Die Schrift „Allure" steht zur Entscheidung: überarbeiten, behalten oder entfernen.
