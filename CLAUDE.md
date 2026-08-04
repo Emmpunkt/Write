@@ -8,6 +8,40 @@ Arbeitsstand, Umgebung, getroffene Entscheidungen und die nächsten Schritte.
 
 Repository: https://github.com/Emmpunkt/Write (öffentlich, MIT)
 
+---
+
+## ➜ AKTUELLER STAND (2026-08-04) — hier anfangen
+
+**Alles auf `main` und nach GitHub gepusht** (`1fa6721`), Arbeitsverzeichnis sauber.
+**256 Tests grün**, am Gerät und an der Maschine verifiziert.
+
+Fertig: Etappen 1, 2a, 2b und **Etappe 3 bis einschließlich Teil 3** (SD-Upload, Notizliste,
+Vorlagen mit Platzhaltern, Serienlauf) — dazu die beiden Korrekturrunden vom 2026-08-04, mit
+denen Blatt und Textrahmen getrennt wurden.
+
+**Der Nutzer hat am 2026-08-04 an der Maschine bestätigt, dass der Rahmenversatz auf dem Papier
+dort landet, wo er soll.** Damit ist an der Trennung Blatt/Textrahmen nichts mehr offen.
+
+### Das eine offene Thema: Etappe 3 Teil 4 — gemischte Stile je Absatz
+
+Der letzte Punkt der Etappe 3. **Vor dem Bauen ist eine Frage zu stellen, die noch unbeantwortet
+ist** (sie ging in zwei Fehlerberichten unter — im neuen Chat bitte erneut stellen):
+
+> Meint „gemischte Stile" *Schriftart und Größe je Absatz*, oder sollen sich **beliebige
+> markierte Bereiche** im Text einzeln formatieren lassen?
+
+Das ist kein Detail: Das zweite bedeutet Textauswahl, Formatspuren im Editor und ein anderes
+Speicherformat für die Notiz — deutlich mehr Arbeit als das erste. Nicht auf Verdacht anfangen.
+
+### Wenn du hier neu einsteigst
+
+1. Diese Datei bis „Arbeitsweise" lesen — dort stehen die Sicherheitsregeln für die Maschine.
+2. `README.md` erklärt das Wie (Aufbau, Schriften, Protokoll); diese Datei das Warum.
+3. Die Abschnitte weiter unten sind **chronologisch** und halten fest, warum etwas so ist.
+   Besonders die beiden Korrekturen vom 2026-08-04 — sie nicht ungefragt zurückdrehen.
+
+---
+
 ## Stand: Etappen 1, 2a und 2b abgeschlossen (2026-08-02)
 
 Alles auf `main`, **118 Tests grün**, am echten Gerät und an der echten Maschine verifiziert.
@@ -307,6 +341,10 @@ laden — sonst verrutscht jede bestehende Notiz beim nächsten Plotten:
 **Merksatz:** Wenn zwei Begriffe im Kopf des Nutzers verschieden sind, dürfen sie nicht auf
 dasselbe Feld zeigen — auch dann nicht, wenn sie meistens denselben Wert haben.
 
+**An der Maschine bestätigt (2026-08-04, vom Nutzer gefahren):** Der Rahmenversatz landet auf
+dem Papier dort, wo er soll. Damit ist die Rechnung „Ursprung = Blattlage + Rahmenlage" nicht
+nur durch Tests, sondern durch einen echten Bogen gedeckt.
+
 **Drei Fehler, die erst das Gerät zeigte** — alle drei bei grünen Tests auf dem PC:
 
 1. Das Platzhalter-Muster `\{([\p{L}\p{N}_-]+)}` warf am Gerät eine `PatternSyntaxException`.
@@ -366,6 +404,12 @@ Fälle, ein Test der den Stift aufsetzt darf nicht versehentlich mitlaufen.
   OK aus." Kein Umbau, kein Entfernen.
 - ~~Untergrenze der Achsen~~ und ~~Zeitschätzung~~ sind am 2026-08-03 gebaut, aber noch nicht
   an der Maschine geprüft. Siehe den Stand-Abschnitt oben.
+- **Zurückgestellt vom Nutzer (2026-08-03): die zu hohe Zeitschätzung bei den SVG-Kursiven.**
+  Geschätzt 59 s, real 30–45 s. Ausdrücklich hinten angestellt („die Zeitschätzung ist mir
+  nicht wichtig"). Das braucht eine Messreihe über mehrere Schriften und Größen, keine
+  Nachjustierung an einem einzelnen Wert.
+- **Offene Frage zu Etappe 3 Teil 4** — siehe den Stand-Abschnitt ganz oben. Vor dem Bauen
+  klären, sonst entsteht womöglich das Falsche.
 - Keine automatische Silbentrennung (bewusst): Sie bräuchte Sprachwissen und läge bei
   zusammengesetzten Wörtern regelmäßig daneben. Stattdessen wirkt ein vom Nutzer gesetzter
   Bindestrich als Trennstelle, und hart getrennte Wörter werden im Editor rot markiert.

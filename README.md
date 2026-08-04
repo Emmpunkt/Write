@@ -415,6 +415,8 @@ endete sauber auf dem Arbeitsnullpunkt mit angehobenem Stift (2026-08-02).
   Am 2026-08-03 am Gerät durchgespielt.
 - **Etappe 3, Teil 3 steht:** Vorlagen mit Platzhaltern und Serienlauf. Am 2026-08-03 an der
   Maschine gefahren — drei Bogen mit Blattwechsel, dazu der Fehlschlag-Pfad.
+- **Blatt und Textrahmen getrennt (2026-08-04):** das Blatt global, der Textrahmen im Blatt
+  positioniert und Teil der Vorlage. Am Gerät geprüft, an der Maschine bestätigt.
 - **Etappe 3, offen:** gemischte Stile je Absatz.
 
 256 Tests grün, alle ohne Netz und ohne Gerät.
