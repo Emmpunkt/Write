@@ -275,3 +275,29 @@ dazwischen.
 - **Automatische Nummerierung oder Datum** — waeren eigene Platzhaltersorten
 - **Papierkorb fuer Vorlagen** — wie bei den Notizen: Loeschen fragt nach, das genuegt
 - **Gemischte Stile je Absatz** — das ist Teil 4
+
+---
+
+## Nachtrag 2026-08-04: Der Versatz gehoert doch zur Vorlage
+
+Diese Spec argumentierte, der Papier-Offset bleibe global, weil er beschreibe, "wo die
+Blattecke am Anschlag liegt". **Diese Begruendung war falsch.**
+
+Rueckmeldung des Nutzers nach dem ersten echten Gebrauch: "Die Blattgroesse ist ja nicht immer
+real. Es ist ja mehr eine Textbox. Der Text hat also einen definierten Rahmen, aber diesen
+Rahmen muss ich dann positionieren koennen."
+
+Damit ist der Rahmen ein Dokumentwert, kein Einrichtungswert. Die Vorlage traegt jetzt
+**Breite, Hoehe, Rand UND Versatz X/Y**; alle fuenf sind im Serie-Reiter als Zahlenfelder
+erreichbar. Die globalen Werte bleiben die Vorgabe fuer Notizen und neue Vorlagen.
+
+Zwei Fehler waren die Folge der urspruenglichen Annahme:
+
+1. Der Serie-Reiter fror die globalen Werte beim Oeffnen ein - eine Versatz-Aenderung erreichte
+   den Serienmodus nie, und ein Satz waere mit veralteten Werten gelaufen.
+2. Ein freies Format liess sich im Serienmodus gar nicht eingeben, weil dort nur das
+   Auswahlfeld mit den Vorgaben stand. Einmal ueberschrieben, war es unrettbar.
+
+**Lehre fuer kuenftige Entscheidungen:** Ob ein Wert "zum Geraet" oder "zum Dokument" gehoert,
+entscheidet der Gebrauch, nicht die Herleitung am Schreibtisch. Und: Ein Bedienelement, das
+Werte anzeigt, die es nicht anbieten kann, ist eine Falle - entweder es kann beides oder keins.

@@ -252,8 +252,26 @@ vorkommt („Schmidt, Anna"); der Tabulator lässt sich auf einer Telefontastatu
 Diese Entscheidung bitte nicht ungefragt umdrehen — ein Wert mit Semikolon ist als Preis dafür
 bewusst nicht darstellbar.
 
-Anders als eine Notiz trägt eine Vorlage **das Blattformat mit** (die Grußkarte bringt ihr
-Format mit). Der Papier-Offset bleibt global — er beschreibt den Anschlag.
+Anders als eine Notiz trägt eine Vorlage **den ganzen Textrahmen mit**: Breite, Höhe, Rand und
+Position. Alle fünf Werte stehen als Zahlenfelder im Serie-Reiter.
+
+### Korrektur am 2026-08-04: der Versatz gehört zur Vorlage
+
+Teil 3 ließ den Versatz global, mit der Begründung, er beschreibe den Anschlag. **Das war
+falsch** — Rückmeldung des Nutzers: „Die Blattgröße ist ja nicht immer real. Es ist mehr eine
+Textbox. Der Text hat einen definierten Rahmen, aber den muss ich positionieren können."
+
+Daraus wurden zwei echte Fehler, beide vom Nutzer gefunden:
+
+1. **Der Serie-Reiter fror die globalen Werte beim Öffnen einer Vorlage ein.** Eine Änderung am
+   Versatz wirkte im Editor sofort, im Serienmodus nie — und ein Satz wäre mit den alten Werten
+   gelaufen. Behoben: `serieAufFrischeGlobaleLegen()` legt bei jeder globalen Änderung neu auf.
+2. **Ein freies Format war im Serienmodus nicht einzugeben.** Das Blatt-Auswahlfeld *zeigt*
+   „50×50" an, *anbieten* kann es nur die Vorgaben; die Zahlenfelder standen in Optionen und
+   wirkten nur global. Wer einmal eine Vorgabe wählte, bekam sein Format nie zurück. Genau das
+   war am Gerät passiert: Die Vorlage stand auf 76×76 — der Vorgabe „Haftnotiz 76".
+
+**Merksatz:** Ein Feld, das Werte anzeigt, die es nicht anbieten kann, ist eine Falle.
 
 **Drei Fehler, die erst das Gerät zeigte** — alle drei bei grünen Tests auf dem PC:
 
