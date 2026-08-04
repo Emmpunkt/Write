@@ -172,33 +172,6 @@ private fun TextFeld(label: String, wert: String, onChange: (String) -> Unit) {
     )
 }
 
-/**
- * Zahlenfeld, das waehrend der Eingabe nicht dazwischenfunkt.
- *
- * Der eingetippte Text bleibt stehen, solange er sich nicht als Zahl lesen laesst - sonst
- * wuerde ein halb eingegebenes "1," sofort verworfen. Uebernommen wird nur ein gueltiger Wert.
- */
-@Composable
-private fun ZahlFeld(
-    label: String,
-    wert: Float,
-    modifier: Modifier = Modifier,
-    onChange: (Float) -> Unit,
-) {
-    var text by rememberSaveable(wert) { mutableStateOf(wert.fmt()) }
-    OutlinedTextField(
-        value = text,
-        onValueChange = { neu ->
-            text = neu
-            neu.replace(',', '.').toFloatOrNull()?.let(onChange)
-        },
-        label = { Text(label) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        modifier = modifier,
-    )
-}
-
 @Composable
 private fun Schalter(titel: String, erklaerung: String, wert: Boolean, onChange: (Boolean) -> Unit) {
     Row(

@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [NoteEntity::class, TemplateEntity::class], version = 2, exportSchema = false)
+@Database(entities = [NoteEntity::class, TemplateEntity::class], version = 3, exportSchema = false)
 abstract class NoteDatabase : RoomDatabase() {
 
     abstract fun notes(): RoomNoteDao
@@ -28,6 +28,11 @@ abstract class NoteDatabase : RoomDatabase() {
          * Room prueft beim Start Spalte fuer Spalte gegen seine eigene Erwartung; eine selbst
          * formulierte Anweisung weicht fast immer in einem Detail ab (NOT NULL, Reihenfolge,
          * Typname) und laesst die App dann beim Oeffnen abstuerzen.
+         *
+         * ACHTUNG: Das ist die Fassung von VERSION 2 und bleibt es. Sie fuehrt auf Stand 2,
+         * die Spalten von Stand 3 haengt MIGRATION_2_3 an. Wird sie nachgezogen, bekommen
+         * Geraete, die ueber 1 -> 2 -> 3 wandern, die Spalten zweimal - und die Migration
+         * bricht ab.
          */
         private const val CREATE_TEMPLATES =
             "CREATE TABLE IF NOT EXISTS `templates` (`id` INTEGER PRIMARY KEY AUTOINCREMENT " +
@@ -50,6 +55,25 @@ abstract class NoteDatabase : RoomDatabase() {
         }
 
         /**
+         * Version 2 -> 3: Die Vorlage bekommt ihre Position dazu.
+         *
+         * Der Versatz war vorher global. Vorhandene Vorlagen starten deshalb bei 0/0 - das
+         * entspricht dem bisherigen Verhalten, solange der globale Versatz 0 war, und ist
+         * sichtbar korrigierbar, falls nicht. Ein Rateversuch waere hier schlechter als ein
+         * Wert, den der Nutzer sieht und anpassen kann.
+         */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `templates` ADD COLUMN `paperOffsetXMm` REAL NOT NULL DEFAULT 0",
+                )
+                db.execSQL(
+                    "ALTER TABLE `templates` ADD COLUMN `paperOffsetYMm` REAL NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
+        /**
          * Eine Datenbank fuer die ganze App.
          *
          * Room haelt Verbindungen und einen Zwischenspeicher; zwei Instanzen auf derselben
@@ -60,7 +84,7 @@ abstract class NoteDatabase : RoomDatabase() {
                 context.applicationContext,
                 NoteDatabase::class.java,
                 "write_notes.db",
-            ).addMigrations(MIGRATION_1_2).build().also { instanz = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instanz = it }
         }
     }
 }

@@ -24,6 +24,8 @@ class VorlageUmwandlungTest {
         paperWidthMm = 100f,
         paperHeightMm = 70f,
         marginMm = 6f,
+        paperOffsetXMm = 12f,
+        paperOffsetYMm = 8f,
     )
 
     @Test
@@ -44,24 +46,56 @@ class VorlageUmwandlungTest {
     }
 
     @Test
-    fun `der Papier-Offset bleibt unberuehrt`() {
-        // Er beschreibt, wo die Blattecke am Anschlag liegt - das aendert sich nicht dadurch,
-        // dass ein kleineres Blatt eingelegt wird.
+    fun `die Vorlage bringt auch ihre Position mit`() {
+        // Korrektur vom 2026-08-04: Der Rahmen ist in Wahrheit eine Textbox, kein Blatt am
+        // Anschlag. Wer auf einer Grusskarte unten rechts schreiben will, braucht Groesse UND
+        // Position in derselben Vorlage. Vorher war der Versatz global - dadurch liess sich
+        // die Position im Serienmodus ueberhaupt nicht einstellen.
         val eigene = vorgabe.copy(paperOffsetXMm = 5f, paperOffsetYMm = 7f)
         val s = eigene.mitVorlage(vorlage())
 
-        assertEquals(5f, s.paperOffsetXMm)
-        assertEquals(7f, s.paperOffsetYMm)
+        assertEquals(12f, s.paperOffsetXMm)
+        assertEquals(8f, s.paperOffsetYMm)
+    }
+
+    @Test
+    fun `eine neue Vorlage uebernimmt die globale Position als Ausgangspunkt`() {
+        // Die globalen Werte bleiben die Vorgabe - nur eben nicht mehr bindend.
+        val eigene = vorgabe.copy(paperOffsetXMm = 5f, paperOffsetYMm = 7f)
+        val neu = neueVorlage(eigene, jetzt = 2000L)
+
+        assertEquals(5f, neu.paperOffsetXMm)
+        assertEquals(7f, neu.paperOffsetYMm)
     }
 
     @Test
     fun `Maschine und Verbindung bleiben unberuehrt`() {
+        // Sie beschreiben das Geraet, nicht das Dokument - anders als der Rahmen.
         val eigene = vorgabe.copy(host = "10.0.0.9", feedDrawMmMin = 900, workAreaXMm = 300f)
         val s = eigene.mitVorlage(vorlage())
 
         assertEquals("10.0.0.9", s.host)
         assertEquals(900, s.feedDrawMmMin)
         assertEquals(300f, s.workAreaXMm)
+    }
+
+    @Test
+    fun `spaetere Aenderungen an der Maschine erreichen eine offene Vorlage`() {
+        // Der Serie-Reiter hatte die globalen Werte beim Oeffnen eingefroren: eine Aenderung
+        // an Host oder Vorschub wirkte danach nicht mehr, und der Satz lief mit alten Werten.
+        // Neu aufgelegt statt neu geladen ist der Weg, das im ViewModel zu beheben.
+        val alt = vorgabe.mitVorlage(vorlage())
+        val neueGlobale = vorgabe.copy(host = "10.0.0.9", feedDrawMmMin = 900)
+
+        val frisch = neueGlobale.mitVorlage(
+            alt.zuVorlage(id = 1L, name = "x", text = "{name}", werte = "", jetzt = 0L),
+        )
+
+        assertEquals("10.0.0.9", frisch.host, "Die neue Maschinenadresse kam nicht an")
+        assertEquals(900, frisch.feedDrawMmMin)
+        // ... und der Rahmen der Vorlage hat das ueberlebt.
+        assertEquals(100f, frisch.paperWidthMm)
+        assertEquals(12f, frisch.paperOffsetXMm)
     }
 
     @Test

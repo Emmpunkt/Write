@@ -228,6 +228,7 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
     fun updateSettings(transform: (AppSettings) -> AppSettings) {
         _settings.update(transform)
         recompute()
+        serieAufFrischeGlobaleLegen()
         persist()
     }
 
@@ -241,6 +242,27 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
     fun updateSettingsLive(transform: (AppSettings) -> AppSettings) {
         _settings.update(transform)
         recompute()
+        serieAufFrischeGlobaleLegen()
+    }
+
+    /**
+     * Legt den Serie-Arbeitszustand neu auf die AKTUELLEN globalen Werte.
+     *
+     * Ohne das war der Serie-Reiter ab dem Oeffnen einer Vorlage eingefroren: Eine Aenderung
+     * an Maschinenadresse oder Vorschub wirkte im Editor sofort, im Serienmodus nie - und ein
+     * Satz lief mit den alten Werten. Am Geraet gefunden (2026-08-04).
+     *
+     * Der Rahmen und das Schriftbild der Vorlage ueberleben das, denn genau die legt
+     * [mitVorlage] wieder darueber.
+     */
+    private fun serieAufFrischeGlobaleLegen() {
+        val s = _serie.value
+        if (s.aktuelleId == 0L) return
+        // Nur Transportmittel fuer die Vorlagen-eigenen Felder; der Zeitstempel wird hier
+        // nicht gespeichert und ist deshalb belanglos.
+        val vorlage = s.settings.zuVorlage(s.aktuelleId, s.name, s.text, s.werte, jetzt = 0L)
+        _serie.update { it.copy(settings = _settings.value.mitVorlage(vorlage)) }
+        serieNeuRechnen()
     }
 
     /** Beim Loslassen: den erreichten Wert einmal sichern. */

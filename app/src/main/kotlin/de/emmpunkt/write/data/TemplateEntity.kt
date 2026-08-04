@@ -4,14 +4,16 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * Eine Vorlage: Text mit Platzhaltern, Schriftbild, Blattformat und die Werteliste.
+ * Eine Vorlage: Text mit Platzhaltern, Schriftbild, Textrahmen und die Werteliste.
  *
- * Anders als [NoteEntity] traegt sie das BLATTFORMAT mit. Das ist der Unterschied zwischen
- * Notiz und Vorlage: Eine Grusskarte bringt ihr Format mit, eine Notiz wird auf das Papier
- * geschrieben, das gerade auf dem Tisch liegt.
+ * Anders als [NoteEntity] traegt sie den GANZEN RAHMEN mit - Groesse, Rand UND Position. Das
+ * ist der Unterschied zwischen Notiz und Vorlage: Eine Notiz wird auf das Papier geschrieben,
+ * das gerade auf dem Tisch liegt; eine Vorlage beschreibt, wo genau der Text stehen soll.
  *
- * Der Papier-Offset gehoert weiterhin NICHT dazu - er beschreibt, wo die Blattecke am Anschlag
- * liegt, und das aendert sich nicht dadurch, dass ein kleineres Blatt eingelegt wird.
+ * Der Versatz war anfangs global, weil er scheinbar den Anschlag beschreibt. Das war ein
+ * Trugschluss (2026-08-04): Der "Bogen" ist in Wahrheit eine Textbox auf dem Tisch. Wer auf
+ * einer Grusskarte unten rechts schreiben will, braucht Groesse UND Position in derselben
+ * Vorlage - sonst laesst sich die Position im Serienmodus gar nicht einstellen.
  */
 @Entity(tableName = "templates")
 data class TemplateEntity(
@@ -38,8 +40,10 @@ data class TemplateEntity(
     val wordSpacing: Float,
     val slantDeg: Float,
 
-    // Blattformat
+    // Textrahmen: Groesse, Rand und Position auf dem Tisch
     val paperWidthMm: Float,
     val paperHeightMm: Float,
     val marginMm: Float,
+    val paperOffsetXMm: Float = 0f,
+    val paperOffsetYMm: Float = 0f,
 )

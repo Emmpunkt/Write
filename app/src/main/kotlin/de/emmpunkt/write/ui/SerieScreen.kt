@@ -115,6 +115,8 @@ fun SerieScreen(
             onAutoFit = {},
         )
 
+        Rahmen(serie.settings, onSettingsChange)
+
         OutlinedTextField(
             value = serie.werte,
             onValueChange = onWerteChange,
@@ -167,6 +169,47 @@ fun SerieScreen(
                 TextButton(onClick = { loeschenBestaetigen = false }) { Text("Abbrechen") }
             },
         )
+    }
+}
+
+/**
+ * Groesse, Rand und Position des Textrahmens - alles fuer DIESE Vorlage.
+ *
+ * Die Felder gehoeren hierher und nicht nach Optionen: Dort wirken sie nur auf die globale
+ * Vorgabe, die eine bestehende Vorlage nie mehr erreicht. Ein freies Format war deshalb im
+ * Serienmodus einmal verloren, nicht wieder einzugeben - das Auswahlfeld darueber zeigt zwar
+ * "50×50" an, anbieten kann es aber nur die Vorgaben.
+ */
+@Composable
+private fun Rahmen(
+    settings: AppSettings,
+    onChange: ((AppSettings) -> AppSettings) -> Unit,
+) {
+    Text("Textrahmen", style = MaterialTheme.typography.labelLarge)
+    Text(
+        "Wo auf dem Tisch der Text steht und wie groß der Kasten ist. Der Versatz zählt von " +
+            "der linken unteren Ecke des Arbeitsbereichs.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ZahlFeld("Breite (mm)", settings.paperWidthMm, Modifier.weight(1f)) { v ->
+            onChange { it.copy(paperWidthMm = v) }
+        }
+        ZahlFeld("Höhe (mm)", settings.paperHeightMm, Modifier.weight(1f)) { v ->
+            onChange { it.copy(paperHeightMm = v) }
+        }
+        ZahlFeld("Rand (mm)", settings.marginMm, Modifier.weight(1f)) { v ->
+            onChange { it.copy(marginMm = v) }
+        }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ZahlFeld("Versatz X (mm)", settings.paperOffsetXMm, Modifier.weight(1f)) { v ->
+            onChange { it.copy(paperOffsetXMm = v) }
+        }
+        ZahlFeld("Versatz Y (mm)", settings.paperOffsetYMm, Modifier.weight(1f)) { v ->
+            onChange { it.copy(paperOffsetYMm = v) }
+        }
     }
 }
 
