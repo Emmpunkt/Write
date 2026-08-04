@@ -23,7 +23,7 @@ zweite Darstellung. Was auf dem Bildschirm steht, fährt der Stift.
 ## Bauen und installieren
 
 ```bash
-./gradlew test                 # 243 Tests, ohne Netz und ohne Gerät
+./gradlew test                 # 256 Tests, ohne Netz und ohne Gerät
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
@@ -56,7 +56,7 @@ Die Trennlinie:
 | Kommt aus der Maschine | Bleibt Einstellung |
 |---|---|
 | Verfahrweg und Untergrenzen | Stifthöhen `Z_up`/`Z_down` (hängen am Stift, nicht am Gerät) |
-| Beschleunigungen (XY und Z getrennt) | Papier-Offset, Blattformat, Ränder |
+| Beschleunigungen (XY und Z getrennt) | Blatt (Format und Lage) und Textrahmen |
 | Vorschub-**Obergrenzen** | Gewünschter Vorschub, bis zu dieser Grenze |
 
 Langsamer zu schreiben bleibt also deine Entscheidung; nur ein Wert **über** dem, was die
@@ -239,10 +239,10 @@ auf; angetippt wird umgeschaltet, „+ Neu" legt an, das Papierkorb-Symbol lösc
 und Wortabstand, Neigung. Beim Umschalten kommt es mit. Eine neue Notiz erbt es von der zuletzt
 offenen: wer eine Einkaufsliste in 5 mm schreibt, schreibt die nächste meist genauso.
 
-**Blattformat, Rand und Papier-Offset gelten dagegen global.** Sie beschreiben, was auf dem
-Tisch liegt, nicht wie die Notiz aussieht. Ein Notizwechsel darf das eingelegte Papier nicht
-„ändern" — sonst plottete man auf einen Bogen, der gar nicht drunterliegt. Ein abweichendes
-Format gehört zu den Vorlagen (Teil 3), nicht zur Notiz.
+**Das Blatt gilt dagegen global.** Es beschreibt, was auf dem Tisch liegt, nicht wie die Notiz
+aussieht. Ein Notizwechsel darf das eingelegte Papier nicht „ändern" — sonst plottete man auf
+einen Bogen, der gar nicht drunterliegt. Ein abweichender Textrahmen gehört zu den Vorlagen
+(Teil 3), nicht zur Notiz.
 
 Der **Titel ist die erste nicht-leere Zeile**, abgeleitet statt gespeichert: ein eigenes Feld
 wäre ein zweiter Ort für dieselbe Information und müsste beim Tippen nachgeführt werden.
@@ -271,16 +271,17 @@ Anna"). Ein Wert mit Semikolon ist damit nicht darstellbar — bei Anreden und N
 Benannt statt durchnummeriert, weil man `{anrede} {name}` nach Monaten noch versteht; bei
 `{1} {2}` müsste man die Werteliste danebenlegen und abzählen.
 
-**Eine Vorlage trägt Schriftbild UND den ganzen Textrahmen** — Breite, Höhe, Rand *und*
-Position. Das ist der Unterschied zur Notiz: Eine Notiz wird auf das Papier geschrieben, das
-gerade auf dem Tisch liegt; eine Vorlage beschreibt, wo genau der Text stehen soll. Alle fünf
-Werte sind im Serie-Reiter als Zahlenfelder erreichbar.
+**Eine Vorlage trägt Schriftbild UND den Textrahmen** — Breite, Höhe *und* Position auf dem
+Blatt. Das ist der Unterschied zur Notiz: Eine Notiz wird auf das Papier geschrieben, das
+gerade auf dem Tisch liegt; eine Vorlage beschreibt, wo genau auf dem Blatt der Text steht.
+Alle vier Werte stehen in der ausklappbaren Leiste „Textrahmen…", im Editor wie im Serie-Reiter.
 
-> Anfangs blieb der Versatz global, mit der Begründung, er beschreibe den Anschlag. Das war ein
-> Trugschluss (2026-08-04): Der „Bogen" ist in Wahrheit eine Textbox auf dem Tisch — wer auf
-> einer Grußkarte unten rechts schreiben will, braucht Größe und Position in derselben Vorlage.
-> Die globalen Werte in den Optionen sind seitdem nur noch die Vorgabe für Notizen und für neu
-> angelegte Vorlagen.
+> Zwei Anläufe waren nötig (beide 2026-08-04). Erst blieb der Versatz global, mit der
+> Begründung, er beschreibe den Anschlag — falsch, denn dann ließ sich die Position im
+> Serienmodus überhaupt nicht einstellen. Der zweite Anlauf schob den ganzen Rahmen in die
+> Vorlage und machte damit **Blatt = Textrahmen**: ein großes Blatt mit kleinem Text darauf war
+> nicht beschreibbar, und die Vorschau zeigte nicht die Karte, sondern den Textkasten. Seitdem
+> sind es zwei getrennte Dinge — das Blatt global, der Rahmen im Blatt positioniert.
 
 **Vor dem Start wird jeder Bogen durchgerechnet** — mit demselben `layoutText`, aus dem auch
 Vorschau und G-Code entstehen. Läuft einer über oder wird ein Wort mitten im Wort getrennt,
@@ -416,7 +417,7 @@ endete sauber auf dem Arbeitsnullpunkt mit angehobenem Stift (2026-08-02).
   Maschine gefahren — drei Bogen mit Blattwechsel, dazu der Fehlschlag-Pfad.
 - **Etappe 3, offen:** gemischte Stile je Absatz.
 
-243 Tests grün, alle ohne Netz und ohne Gerät.
+256 Tests grün, alle ohne Netz und ohne Gerät.
 
 Hinweis zur Installation: Über USB brach die Übertragung reproduzierbar ab (Gerät ging
 mitten im Streamed Install offline). Über WLAN läuft sie zuverlässig:

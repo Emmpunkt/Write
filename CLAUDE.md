@@ -229,10 +229,10 @@ Room speichert `NoteEntity` (Text + Schriftbild), das DAO liegt hinter einem eig
 Interface, damit alles ohne Emulator prüfbar bleibt – dasselbe Muster wie `FakeFluidNc`.
 Die gesamte Logik (Titel, Umwandlung, Erben) sitzt in reinen Funktionen in `NoteLogik.kt`.
 
-Festgelegt vom Nutzer: **Blattformat, Rand und Papier-Offset gehören NICHT zur Notiz**,
-sondern gelten global – das Papier liegt auf dem Tisch, nicht im Dokument. Ein abweichendes
-Format darf erst bei den **Vorlagen (Teil 3)** mitkommen; das ist der richtige Ort dafür,
-weil eine Grußkarte ihr Format mitbringt, eine Notiz aber nicht.
+Festgelegt vom Nutzer: **Das Blatt gehört NICHT zur Notiz**, sondern gilt global – das Papier
+liegt auf dem Tisch, nicht im Dokument. Ein abweichender *Textrahmen* darf erst bei den
+**Vorlagen (Teil 3)** mitkommen; das ist der richtige Ort dafür, weil eine Grußkarte ihren
+Textkasten mitbringt, eine Notiz aber nicht.
 
 **Am Gerät gefundener Fehler, den kein Test zeigen konnte:** Die App öffnete nach einem
 Neustart eine andere Notiz als die zuletzt sichtbare. Die offene Notiz war aus den
@@ -252,8 +252,8 @@ vorkommt („Schmidt, Anna"); der Tabulator lässt sich auf einer Telefontastatu
 Diese Entscheidung bitte nicht ungefragt umdrehen — ein Wert mit Semikolon ist als Preis dafür
 bewusst nicht darstellbar.
 
-Anders als eine Notiz trägt eine Vorlage **den ganzen Textrahmen mit**: Breite, Höhe, Rand und
-Position. Alle fünf Werte stehen als Zahlenfelder im Serie-Reiter.
+Anders als eine Notiz trägt eine Vorlage **den ganzen Textrahmen mit**: Breite, Höhe und
+Position. (Der Rand fiel bei der zweiten Korrektur weg — siehe unten.)
 
 ### Korrektur am 2026-08-04: der Versatz gehört zur Vorlage
 
@@ -272,6 +272,40 @@ Daraus wurden zwei echte Fehler, beide vom Nutzer gefunden:
    war am Gerät passiert: Die Vorlage stand auf 76×76 — der Vorgabe „Haftnotiz 76".
 
 **Merksatz:** Ein Feld, das Werte anzeigt, die es nicht anbieten kann, ist eine Falle.
+
+### Zweite Korrektur am 2026-08-04: Blatt und Textrahmen sind zwei Dinge
+
+Die erste Korrektur schob den ganzen Rahmen in die Vorlage — und machte damit **Blatt =
+Textrahmen**. Rückmeldung des Nutzers: „Jetzt habe ich Blatt=Textrahmen. Das müsste eigentlich
+getrennt sein. Also auch ein großes Blatt einstellen und den Textrahmen dann in diesem Blatt
+positionieren."
+
+Er hat recht: Ein großes Blatt mit kleinem Text darauf ließ sich gar nicht beschreiben. Wer das
+wollte, musste das Blatt kleinlügen — und sah in der Vorschau dann nicht die Karte, sondern den
+Textkasten. Seitdem gilt:
+
+| | was es beschreibt | wo es steht | wem es gehört |
+|---|---|---|---|
+| **Blatt** | das Papier auf dem Tisch: Größe + Lage am Anschlag | Optionen, Auswahlfeld im Editor | global |
+| **Textrahmen** | der Kasten für den Text, **im Blatt** positioniert | ausklappbar in der Stilleiste | dem Dokument (Vorlage) |
+
+Der Textsatz rechnet in **Rahmen-Koordinaten**; auf den Tisch kommt der Rahmen erst in
+`toMachineProfile()`, wo beide Verschiebungen addiert werden (`ursprungXMm`). Der Rahmen hat
+**keine eigenen Ränder mehr** — er *ist* der nutzbare Bereich. `marginMm` blieb nur als Vorgabe
+für „Blatt füllen"; ein Rand im Rahmen wäre eine zweite Stellschraube für dieselbe Sache.
+
+Zwei Umstellungen mussten alte Einstellungen unverändert weiterschreiben, nicht bloß irgendwie
+laden — sonst verrutscht jede bestehende Notiz beim nächsten Plotten:
+
+- **DataStore:** Fehlen die Rahmen-Schlüssel, entsteht der Rahmen aus dem gespeicherten Blatt
+  samt Rand (`blattFuellen()`). Die Vorgabe (A6 mit 8 mm) wäre dort schlicht falsch gewesen.
+- **Room 3 → 4:** Der alte Rand wandert in die Lage, aus Kasten minus zweimal Rand wird die
+  Rahmengröße. SQLite kann keine Spalten entfernen, deshalb der Umweg über eine neue Tabelle.
+  Der alte Versatz zählte ab der Tisch-, der neue ab der Blattecke — solange das Blatt bei 0/0
+  liegt, dieselbe Stelle. Am Gerät geprüft: beide Vorlagen samt Werteliste erhalten.
+
+**Merksatz:** Wenn zwei Begriffe im Kopf des Nutzers verschieden sind, dürfen sie nicht auf
+dasselbe Feld zeigen — auch dann nicht, wenn sie meistens denselben Wert haben.
 
 **Drei Fehler, die erst das Gerät zeigte** — alle drei bei grünen Tests auf dem PC:
 

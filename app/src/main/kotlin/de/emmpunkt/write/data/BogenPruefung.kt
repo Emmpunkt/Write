@@ -52,12 +52,28 @@ fun pruefeBogen(
 }
 
 /**
- * Prueft, ob aus den Einstellungen ueberhaupt ein Rahmen entstehen kann.
+ * Prueft, ob aus den Einstellungen ueberhaupt ein Rahmen entstehen kann - und ob er aufs Blatt
+ * passt.
  *
- * `Frame` wirft im Konstruktor, wenn die Raender breiter sind als das Blatt. Bei einer Vorlage
- * mit 8 mm Rand auf einer 10-mm-Karte fuehrte das zum Absturz statt zu einer Meldung.
+ * `Frame` wirft im Konstruktor bei einer Breite von 0 oder weniger. Beim Tippen einer Zahl
+ * fuehrte das zum Absturz statt zu einer Meldung, deshalb der Fang.
+ *
+ * Der Ueberstand ueber das Blatt sperrt den Serienstart bewusst: Bei einem Satz Platzkarten
+ * merkt es sonst niemand vor dem Plotten, und der Stift schreibt neben die Karte auf den Tisch.
  */
-fun rahmenFehler(s: AppSettings): String? =
+fun rahmenFehler(s: AppSettings): String? {
     runCatching { s.toFrame() }.exceptionOrNull()?.let {
-        "Blatt und Rand passen nicht zusammen: ${it.message}"
+        return "Der Textrahmen ergibt keine Fläche: ${it.message}"
     }
+    if (!s.rahmenPasstAufsBlatt) {
+        return "Der Textrahmen ragt über das Blatt hinaus " +
+            "(${masz(s.paperWidthMm)} × ${masz(s.paperHeightMm)} mm). " +
+            "Blatt unter Optionen vergrößern oder den Rahmen verschieben."
+    }
+    return null
+}
+
+/** Ganze Millimeter ohne Nachkomma - "50" liest sich besser als "50,0". */
+private fun masz(mm: Float): String =
+    if (mm == mm.toInt().toFloat()) mm.toInt().toString()
+    else String.format(java.util.Locale.GERMANY, "%.1f", mm)

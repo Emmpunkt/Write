@@ -6,14 +6,14 @@ import androidx.room.PrimaryKey
 /**
  * Eine Vorlage: Text mit Platzhaltern, Schriftbild, Textrahmen und die Werteliste.
  *
- * Anders als [NoteEntity] traegt sie den GANZEN RAHMEN mit - Groesse, Rand UND Position. Das
- * ist der Unterschied zwischen Notiz und Vorlage: Eine Notiz wird auf das Papier geschrieben,
- * das gerade auf dem Tisch liegt; eine Vorlage beschreibt, wo genau der Text stehen soll.
+ * Anders als [NoteEntity] traegt sie den GANZEN RAHMEN mit - Groesse UND Position. Das ist der
+ * Unterschied zwischen Notiz und Vorlage: Eine Notiz wird auf das Papier geschrieben, das
+ * gerade auf dem Tisch liegt; eine Vorlage beschreibt, wo genau auf dem Blatt der Text steht.
  *
- * Der Versatz war anfangs global, weil er scheinbar den Anschlag beschreibt. Das war ein
- * Trugschluss (2026-08-04): Der "Bogen" ist in Wahrheit eine Textbox auf dem Tisch. Wer auf
- * einer Grusskarte unten rechts schreiben will, braucht Groesse UND Position in derselben
- * Vorlage - sonst laesst sich die Position im Serienmodus gar nicht einstellen.
+ * Das BLATT gehoert bewusst NICHT hierher. Es beschreibt, was auf dem Tisch liegt, und steht
+ * global unter Optionen. Anfangs war beides dasselbe Feld - dadurch war das Blatt in der
+ * Vorschau nicht die Karte, sondern der Textkasten, und ein grosses Blatt mit kleinem Text
+ * liess sich ueberhaupt nicht abbilden.
  */
 @Entity(tableName = "templates")
 data class TemplateEntity(
@@ -40,10 +40,9 @@ data class TemplateEntity(
     val wordSpacing: Float,
     val slantDeg: Float,
 
-    // Textrahmen: Groesse, Rand und Position auf dem Tisch
-    val paperWidthMm: Float,
-    val paperHeightMm: Float,
-    val marginMm: Float,
-    val paperOffsetXMm: Float = 0f,
-    val paperOffsetYMm: Float = 0f,
+    // Textrahmen: Groesse und Lage AUF DEM BLATT, ab dessen linker unterer Ecke.
+    val rahmenXMm: Float,
+    val rahmenYMm: Float,
+    val rahmenBreiteMm: Float,
+    val rahmenHoeheMm: Float,
 )

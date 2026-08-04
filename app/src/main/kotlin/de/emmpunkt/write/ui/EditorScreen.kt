@@ -141,7 +141,7 @@ fun EditorScreen(
                 }
                 PreviewCanvas(
                     strokes = document.laidOut?.strokes.orEmpty(),
-                    frame = settings.toFrame(),
+                    blattbild = settings.toBlattbild(),
                     modifier = Modifier.height(200.dp),
                     showTravel = showTravel,
                 )
@@ -186,10 +186,16 @@ private fun Hinweise(document: DocumentState, settings: AppSettings) {
     if (document.overflow) {
         Warnung("Text ist höher als das Blatt.")
     }
-    if (!settings.paperFitsWorkArea) {
+    if (!settings.blattPasstAufTisch) {
         Warnung(
             "Das Blatt passt mit diesem Versatz nicht auf den Tisch " +
                 "(${settings.workAreaXMm.fmt()} × ${settings.workAreaYMm.fmt()} mm).",
+        )
+    }
+    if (!settings.rahmenPasstAufsBlatt) {
+        Warnung(
+            "Der Textrahmen ragt über das Blatt hinaus " +
+                "(${settings.paperWidthMm.fmt()} × ${settings.paperHeightMm.fmt()} mm).",
         )
     }
 }
