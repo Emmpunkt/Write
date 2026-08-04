@@ -110,10 +110,14 @@ fun TemplateEntity.alignEnum(): Align =
     runCatching { Align.valueOf(align) }.getOrElse { AppSettings().align }
 
 /**
- * Legt Schriftbild UND Blattformat der Vorlage ueber die Einstellungen.
+ * Legt Schriftbild UND Textrahmen der Vorlage ueber die Einstellungen.
  *
- * Papier-Offset, Maschine und Verbindung bleiben unberuehrt - sie beschreiben die Einrichtung,
- * nicht das Dokument.
+ * Maschine und Verbindung bleiben unberuehrt - sie beschreiben das Geraet, nicht das Dokument.
+ * Der Rahmen dagegen gehoert ganz der Vorlage, samt Position: Sie beschreibt, wo auf dem Tisch
+ * der Text stehen soll.
+ *
+ * Bewusst als Ueberlagerung und nicht als Ersatz: So laesst sich eine offene Vorlage jederzeit
+ * neu auf die AKTUELLEN globalen Werte legen, wenn sich Host oder Vorschub geaendert haben.
  */
 fun AppSettings.mitVorlage(v: TemplateEntity): AppSettings = copy(
     fontId = v.fontId,
@@ -126,6 +130,8 @@ fun AppSettings.mitVorlage(v: TemplateEntity): AppSettings = copy(
     paperWidthMm = v.paperWidthMm,
     paperHeightMm = v.paperHeightMm,
     marginMm = v.marginMm,
+    paperOffsetXMm = v.paperOffsetXMm,
+    paperOffsetYMm = v.paperOffsetYMm,
 )
 
 /** Der umgekehrte Weg: aus dem Arbeitszustand wird wieder eine Vorlage zum Speichern. */
@@ -151,6 +157,8 @@ fun AppSettings.zuVorlage(
     paperWidthMm = paperWidthMm,
     paperHeightMm = paperHeightMm,
     marginMm = marginMm,
+    paperOffsetXMm = paperOffsetXMm,
+    paperOffsetYMm = paperOffsetYMm,
 )
 
 /**

@@ -271,10 +271,16 @@ Anna"). Ein Wert mit Semikolon ist damit nicht darstellbar — bei Anreden und N
 Benannt statt durchnummeriert, weil man `{anrede} {name}` nach Monaten noch versteht; bei
 `{1} {2}` müsste man die Werteliste danebenlegen und abzählen.
 
-**Eine Vorlage trägt Schriftbild UND Blattformat** — das ist der Unterschied zur Notiz. Eine
-Grußkarte bringt ihr Format mit, eine Notiz wird auf das Papier geschrieben, das gerade auf dem
-Tisch liegt. Der **Papier-Offset** bleibt trotzdem global: Er beschreibt, wo die Blattecke am
-Anschlag liegt, und das ändert sich nicht dadurch, dass ein kleineres Blatt eingelegt wird.
+**Eine Vorlage trägt Schriftbild UND den ganzen Textrahmen** — Breite, Höhe, Rand *und*
+Position. Das ist der Unterschied zur Notiz: Eine Notiz wird auf das Papier geschrieben, das
+gerade auf dem Tisch liegt; eine Vorlage beschreibt, wo genau der Text stehen soll. Alle fünf
+Werte sind im Serie-Reiter als Zahlenfelder erreichbar.
+
+> Anfangs blieb der Versatz global, mit der Begründung, er beschreibe den Anschlag. Das war ein
+> Trugschluss (2026-08-04): Der „Bogen" ist in Wahrheit eine Textbox auf dem Tisch — wer auf
+> einer Grußkarte unten rechts schreiben will, braucht Größe und Position in derselben Vorlage.
+> Die globalen Werte in den Optionen sind seitdem nur noch die Vorgabe für Notizen und für neu
+> angelegte Vorlagen.
 
 **Vor dem Start wird jeder Bogen durchgerechnet** — mit demselben `layoutText`, aus dem auch
 Vorschau und G-Code entstehen. Läuft einer über oder wird ein Wort mitten im Wort getrennt,

@@ -42,7 +42,7 @@ Maschine zu tun hat, bleibt global.
 legt das Papier ein, und beim Umschalten auf eine andere Notiz soll nicht plotzlich ein anderes
 Format eingestellt sein als das, was auf dem Tisch liegt. Der **Rand** folgt derselben Logik
 und steht ohnehin schon heute im Einstellungen-Reiter, also dort, wo die globalen Werte
-stehen. Der **Papier-Offset** ebenso: Er beschreibt, wo die Blattecke am Anschlag liegt.
+stehen. Der **Papier-Offset** ebenso. (Berichtigt am 2026-08-04: Bei einer VORLAGE gehoert er doch dazu - siehe den Nachtrag am Ende dieser Datei.)
 
 Folge fuer die Bedienung: Das Blatt-Auswahlfeld sitzt weiterhin im Editor (kurzer Weg), wirkt
 aber auf alle Notizen. Vom Nutzer bestaetigt - der Editor ist das erste Fenster, dort wird

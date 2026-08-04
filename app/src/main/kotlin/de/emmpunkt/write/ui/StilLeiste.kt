@@ -22,11 +22,14 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -276,4 +279,37 @@ fun AuswahlFeld(
             }
         }
     }
+}
+
+/**
+ * Zahlenfeld, das waehrend der Eingabe nicht dazwischenfunkt.
+ *
+ * Der eingetippte Text bleibt stehen, solange er sich nicht als Zahl lesen laesst - sonst
+ * wuerde ein halb eingegebenes "1," sofort verworfen. Uebernommen wird nur ein gueltiger Wert;
+ * das Komma als Dezimaltrennzeichen ist ausdruecklich erlaubt.
+ *
+ * Aus `SettingsScreen.kt` hierher geholt, weil der Serie-Reiter dieselben Felder fuer den
+ * Textrahmen der Vorlage braucht. Zwei getrennte Fassungen liefen sonst auseinander.
+ */
+@Composable
+fun ZahlFeld(
+    label: String,
+    wert: Float,
+    modifier: Modifier = Modifier,
+    onChange: (Float) -> Unit,
+) {
+    // Der Schluessel `wert` sorgt dafuer, dass ein von aussen geaenderter Wert im Feld
+    // ankommt - etwa wenn eine andere Vorlage geoeffnet wird.
+    var text by rememberSaveable(wert) { mutableStateOf(wert.fmt()) }
+    OutlinedTextField(
+        value = text,
+        onValueChange = { neu ->
+            text = neu
+            neu.replace(',', '.').toFloatOrNull()?.let(onChange)
+        },
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = modifier,
+    )
 }
