@@ -512,6 +512,25 @@ Zwei Folgen, die wichtiger sind als der Fix selbst:
 **Merksatz:** Wenn eine Funktion Maße entgegennimmt, muss feststehen, ob sie den Inhalt oder die
 Hülle beschreiben — und die Platzprüfung darf das nicht ein zweites Mal raten.
 
+### Nachspiel: derselbe Fehler steckte in jeder runden Ecke
+
+Der Nutzer meldete kurz darauf, die **Zierecken** seien „noch leicht daneben" — 3,6 mm tief
+schnitt die eingezogene Ecke in den Text. Die abgerundete Ecke tat dasselbe, nur um 2,9 mm.
+
+**Der Test hätte das fangen müssen und tat es nicht.** Er prüfte nur die Kantenmitten, und die
+Ausnahme war ausdrücklich hineingeschrieben: „Bei eingezogenen oder abgerundeten Ecken liegt die
+Ecke bauartbedingt frei." Das war eine Rationalisierung, und sie hat genau den nächsten Fehler
+verdeckt. Der Test prüft jetzt **auch die Ecken**, für jede Form und jede Zipfelseite.
+
+Die Regel gilt seitdem ausnahmslos: Wer einen Kasten bestellt, bekommt ihn ganz. Runde und
+eingezogene Ecken **rücken dafür nach außen** (`eckenZuschlag`, hergeleitet aus der Geometrie
+der jeweiligen Ecke statt geraten). Der Einzug der Zierecken wurde von 16 % auf 8 % gedämpft —
+nach Entscheidung des Nutzers: Bei 16 % wäre aus einem 58er Kasten ein 76er Rahmen geworden,
+der auf einer A6-Karte nicht mehr unterzubringen ist.
+
+**Merksatz:** Eine Ausnahme im Test ist ein Versteck für den nächsten Fehler. Wenn die
+Begründung mit „bauartbedingt" anfängt, ist sie wahrscheinlich nur bequem.
+
 ## Bekannte offene Punkte
 
 - ~~Die Schrift „Allure" gefällt dem Nutzer nicht~~ **Erledigt (2026-08-03): Allure bleibt.**

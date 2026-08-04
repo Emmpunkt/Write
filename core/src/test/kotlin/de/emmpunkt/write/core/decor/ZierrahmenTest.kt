@@ -27,20 +27,33 @@ class ZierrahmenTest {
     }
 
     @Test
-    fun `die geschlossenen Formen bleiben innerhalb ihrer Masse`() {
-        // Die Sprechblase ist bewusst ausgenommen: ihr Zipfel haengt aussen an. Dass er den
-        // bestellten Kasten NICHT auffrisst, prueft `der Zipfel haengt aussen an`.
-        RahmenForm.entries
-            .filter { it != RahmenForm.KEINER && it != RahmenForm.SPRECHBLASE }
-            .forEach { form ->
-                val box = zuege(form).boundingBox()
-                    ?: error("$form hat gar nichts gezeichnet")
-                assertTrue(
-                    box.minX >= -0.01f && box.minY >= -0.01f &&
-                        box.maxX <= breite + 0.01f && box.maxY <= hoehe + 0.01f,
-                    "$form ragt heraus: $box",
-                )
-            }
+    fun `scharfe Ecken liegen genau auf dem bestellten Kasten`() {
+        // Rechteck und Doppellinie brauchen keinen Platz nach aussen - sie halten in der Ecke
+        // nichts frei und duerfen deshalb exakt auf dem bestellten Mass sitzen.
+        listOf(RahmenForm.RECHTECK, RahmenForm.DOPPELLINIE).forEach { form ->
+            val box = zuege(form).boundingBox()!!
+            assertTrue(
+                box.minX >= -0.01f && box.minY >= -0.01f &&
+                    box.maxX <= breite + 0.01f && box.maxY <= hoehe + 0.01f,
+                "$form ragt heraus: $box",
+            )
+        }
+    }
+
+    @Test
+    fun `runde und eingezogene Ecken ruecken nur so weit nach aussen wie noetig`() {
+        // Sie MUESSEN hinausragen, sonst schnitten sie in den Text. Unbegrenzt darf das aber
+        // nicht sein: Ein Rahmen, der den Kasten um die halbe Seitenlaenge ueberragt, waere auf
+        // einer A6-Karte nicht mehr unterzubringen.
+        val grenze = minOf(breite, hoehe) * 0.25f
+        listOf(RahmenForm.ABGERUNDET, RahmenForm.ZIERECKEN, RahmenForm.SPRECHBLASE).forEach { form ->
+            val box = zuege(form).boundingBox()!!
+            assertTrue(
+                box.minX >= -grenze && box.minY >= -grenze &&
+                    box.maxX <= breite + grenze && box.maxY <= hoehe + grenze,
+                "$form ragt zu weit hinaus: $box (Grenze $grenze mm)",
+            )
+        }
     }
 
     @Test
@@ -71,15 +84,19 @@ class ZierrahmenTest {
     }
 
     @Test
-    fun `abgerundete Ecken lassen die Ecke selbst frei`() {
-        val punkte = zuege(RahmenForm.ABGERUNDET).flatMap { it.points }
-        // Kein Punkt darf genau in der Ecke liegen - dort ist der Bogen.
+    fun `abgerundete Ecken sind wirklich rund`() {
+        val zuege = zuege(RahmenForm.ABGERUNDET)
+        val punkte = zuege.flatMap { it.points }
+        val box = zuege.boundingBox()!!
+
+        // Kein Punkt in der Ecke des Rahmens selbst - dort laeuft der Bogen.
         assertTrue(
-            punkte.none { abs(it.x) < 0.01f && abs(it.y) < 0.01f },
-            "In der Ecke liegt ein Punkt - dann ist sie nicht rund",
+            punkte.none { abs(it.x - box.minX) < 0.01f && abs(it.y - box.minY) < 0.01f },
+            "In der Rahmenecke liegt ein Punkt - dann ist sie nicht rund",
         )
-        assertTrue(punkte.any { abs(it.x) < 0.01f }, "Die linke Kante muesste anliegen")
-        assertTrue(punkte.any { abs(it.y) < 0.01f }, "Die untere Kante muesste anliegen")
+        // Die Kanten liegen an ihren Raendern an.
+        assertTrue(punkte.any { abs(it.x - box.minX) < 0.01f }, "Die linke Kante fehlt")
+        assertTrue(punkte.any { abs(it.y - box.minY) < 0.01f }, "Die untere Kante fehlt")
     }
 
     @Test
@@ -145,13 +162,18 @@ class ZierrahmenTest {
         // Teil war dadurch bei Zipfel links/rechts rund 10 mm schmaler als bestellt - der Text
         // stand sichtbar neben der Blase.
         //
-        // Geprueft werden die Kantenmitten, nicht die Ecken: Bei eingezogenen oder abgerundeten
-        // Ecken liegt die Ecke selbst bauartbedingt frei, eine ganze Kante aber nie.
+        // Geprueft werden AUCH DIE ECKEN. Die erste Fassung dieses Tests nahm sie aus - "bei
+        // eingezogenen oder abgerundeten Ecken liegt die Ecke bauartbedingt frei". Das war eine
+        // Ausrede, und sie hat genau den naechsten Fehler verdeckt: Die Zierecken schnitten
+        // 3,6 mm tief in den Text, die abgerundete Ecke 2,9 mm. Wer einen Kasten bestellt, will
+        // ihn ganz - dann muss die Form eben weiter nach aussen ruecken.
         val b = 58f
         val h = 58f
+        val d = 0.1f
         val proben = listOf(
-            Point(b / 2f, 0.5f), Point(b / 2f, h - 0.5f),
-            Point(0.5f, h / 2f), Point(b - 0.5f, h / 2f),
+            Point(b / 2f, d), Point(b / 2f, h - d),
+            Point(d, h / 2f), Point(b - d, h / 2f),
+            Point(d, d), Point(b - d, d), Point(d, h - d), Point(b - d, h - d),
             Point(b / 2f, h / 2f),
         )
 

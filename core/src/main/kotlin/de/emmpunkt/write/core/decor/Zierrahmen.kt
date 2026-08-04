@@ -7,6 +7,7 @@ import kotlin.math.acos
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * Die Form eines gezeichneten Rahmens.
@@ -55,15 +56,59 @@ fun rahmenZuege(
 ): List<Polyline> {
     if (form == RahmenForm.KEINER || breiteMm <= 0f || hoeheMm <= 0f) return emptyList()
 
-    return when (form) {
+    // Runde und eingezogene Ecken schneiden zwangslaeufig in die Ecke des Kastens. Damit der
+    // BESTELLTE Bereich trotzdem ganz frei bleibt, rueckt der Rahmen um diesen Betrag nach
+    // aussen - gezeichnet wird also auf einem groesseren Kasten und zurueckgeschoben.
+    val e = eckenZuschlag(form, breiteMm, hoeheMm)
+    val b = breiteMm + 2 * e
+    val h = hoeheMm + 2 * e
+
+    val zuege = when (form) {
         RahmenForm.KEINER -> emptyList()
-        RahmenForm.RECHTECK -> listOf(rechteck(0f, 0f, breiteMm, hoeheMm))
-        RahmenForm.DOPPELLINIE -> doppellinie(breiteMm, hoeheMm)
-        RahmenForm.ABGERUNDET -> listOf(abgerundet(breiteMm, hoeheMm, eckradius(breiteMm, hoeheMm)))
-        RahmenForm.SPRECHBLASE -> listOf(sprechblase(breiteMm, hoeheMm, zipfel))
-        RahmenForm.ZIERECKEN -> listOf(zierecken(breiteMm, hoeheMm))
+        RahmenForm.RECHTECK -> listOf(rechteck(0f, 0f, b, h))
+        RahmenForm.DOPPELLINIE -> doppellinie(b, h)
+        RahmenForm.ABGERUNDET -> listOf(abgerundet(b, h, eckradius(b, h)))
+        RahmenForm.SPRECHBLASE -> listOf(sprechblase(b, h, zipfel))
+        RahmenForm.ZIERECKEN -> listOf(zierecken(b, h))
     }
+    return if (e == 0f) zuege else zuege.map { it.translate(-e, -e) }
 }
+
+/**
+ * Wie weit die Ecke einer Form diagonal von der Rahmenecke wegbleibt, je Millimeter kuerzerer
+ * Seite.
+ *
+ * - Rechteck und Doppellinie haben scharfe Ecken und halten nichts frei.
+ * - Die eingezogene Ecke laeuft im Abstand [ZIER_ANTEIL] um die Rahmenecke.
+ * - Die abgerundete Ecke kommt der Rahmenecke bis auf r * (sqrt(2) - 1) nahe.
+ */
+private fun eckenLuecke(form: RahmenForm): Float = when (form) {
+    RahmenForm.KEINER, RahmenForm.RECHTECK, RahmenForm.DOPPELLINIE -> 0f
+    RahmenForm.ZIERECKEN -> ZIER_ANTEIL
+    RahmenForm.ABGERUNDET, RahmenForm.SPRECHBLASE -> ECKRADIUS_ANTEIL * (sqrt(2f) - 1f)
+}
+
+/**
+ * Der Betrag, um den der Rahmen nach aussen ruecken muss, damit die Ecke des bestellten Kastens
+ * innerhalb bleibt.
+ *
+ * Die Kastenecke liegt diagonal `e * sqrt(2)` von der Rahmenecke entfernt; die Form haelt dort
+ * `luecke * min(B, H)` frei, wobei B und H die bereits vergroesserten Masse sind. Aus
+ *
+ *     e * sqrt(2) = RESERVE * luecke * (min + 2e)
+ *
+ * folgt die Formel unten. Die Reserve verhindert, dass die Ecke genau auf der Linie landet.
+ */
+private fun eckenZuschlag(form: RahmenForm, b: Float, h: Float): Float {
+    val k = ECKEN_RESERVE * eckenLuecke(form)
+    if (k <= 0f) return 0f
+    val nenner = sqrt(2f) - 2f * k
+    // Bei einer absurd tiefen Eckform gaebe es keine Loesung - dann lieber nicht vergroessern
+    // als eine negative Zahl weiterzureichen.
+    return if (nenner <= 0f) 0f else k * minOf(b, h) / nenner
+}
+
+private const val ECKEN_RESERVE = 1.05f
 
 /**
  * Wie fein ein Bogen in Geraden zerlegt wird.
@@ -121,7 +166,18 @@ private fun doppellinie(b: Float, h: Float): List<Polyline> {
 }
 
 /** Eckradius: anteilig zur kuerzeren Seite, damit die Ecke quadratisch bleibt. */
-private fun eckradius(b: Float, h: Float): Float = minOf(b, h) * 0.12f
+private const val ECKRADIUS_ANTEIL = 0.12f
+
+private fun eckradius(b: Float, h: Float): Float = minOf(b, h) * ECKRADIUS_ANTEIL
+
+/**
+ * Wie tief die Ecke eingezogen wird, anteilig zur kuerzeren Seite.
+ *
+ * Bewusst gedaempft (vorher 0,16): Je tiefer der Einzug, desto weiter muss der ganze Rahmen
+ * nach aussen ruecken, damit der Text frei bleibt - bei 0,16 waere aus einem 58er Kasten ein
+ * 76er Rahmen geworden, der auf einer A6-Karte nicht mehr unterzubringen ist.
+ */
+private const val ZIER_ANTEIL = 0.08f
 
 /** Rechteck mit vier Viertelbogen-Ecken, als ein geschlossener Zug. */
 private fun abgerundet(b: Float, h: Float, r: Float): Polyline {
@@ -218,7 +274,7 @@ private fun mitZipfel(
  * die man auf das Seitenverhaeltnis dehnt.
  */
 private fun zierecken(b: Float, h: Float): Polyline {
-    val zier = (minOf(b, h) * 0.16f).coerceAtMost(minOf(b, h) / 2f)
+    val zier = (minOf(b, h) * ZIER_ANTEIL).coerceAtMost(minOf(b, h) / 2f)
 
     // Der Mittelpunkt jedes Bogens liegt in der Ecke SELBST. Dadurch treffen Bogenanfang und
     // Kantenende zwangslaeufig aufeinander - es gibt keine Naht, an der die Linien schief

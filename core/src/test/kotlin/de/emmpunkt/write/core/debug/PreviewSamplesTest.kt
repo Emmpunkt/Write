@@ -224,6 +224,26 @@ class PreviewSamplesTest {
             Frame(200f, 45f, Margins.all(0f)),
         )
 
+        // Rahmen samt bestelltem Kasten: zeigt, ob der Text wirklich frei bleibt.
+        RahmenForm.entries.filter { it != RahmenForm.KEINER }.forEach { form ->
+            val bestellt = de.emmpunkt.write.core.geometry.Polyline(
+                listOf(
+                    de.emmpunkt.write.core.geometry.Point(0f, 0f),
+                    de.emmpunkt.write.core.geometry.Point(120f, 0f),
+                    de.emmpunkt.write.core.geometry.Point(120f, 80f),
+                    de.emmpunkt.write.core.geometry.Point(0f, 80f),
+                    de.emmpunkt.write.core.geometry.Point(0f, 0f),
+                ),
+            )
+            // Um 20 mm verschoben, damit auch das, was der Rahmen nach aussen braucht,
+            // im Bild landet - sonst schneidet der Renderer es an der Blattkante ab.
+            rendereZuege(
+                "25-mit-kasten-${form.name.lowercase()}",
+                (rahmenZuege(form, 120f, 80f) + bestellt).map { it.translate(20f, 20f) },
+                Frame(160f, 120f, Margins.all(0f)),
+            )
+        }
+
         val erzeugt = outDir.listFiles { f: File -> f.extension == "png" }?.size ?: 0
         assertTrue(erzeugt >= 30, "Es wurden nur $erzeugt Musterbilder erzeugt")
         println("Musterbilder in ${outDir.absolutePath}")
