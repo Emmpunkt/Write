@@ -12,7 +12,7 @@ Repository: https://github.com/Emmpunkt/Write (öffentlich, MIT)
 
 ## ➜ AKTUELLER STAND (2026-08-04) — hier anfangen
 
-**Etappe 3 und Etappe 4 sind gebaut.** 408 Tests grün, alles am Gerät verifiziert. Zweig
+**Etappe 3 und Etappe 4 sind fertig und an der Maschine bestätigt.** 413 Tests grün. Zweig
 `absatzstile`, noch nicht nach `main` und noch nicht gepusht.
 
 Fertig: Etappen 1, 2a, 2b, **Etappe 3 komplett** (SD-Upload, Notizliste, Vorlagen mit
@@ -24,10 +24,17 @@ gezeichnete Rahmen).
 1. **Überschrift über Fließtext — vom Nutzer gefahren, „es passte alles".** Damit sind die
    Absatzstile und die Vorschubregel am Absatzwechsel auf Papier bestätigt.
 2. **Hochkant gedrehter Bogen — vom Nutzer gefahren, „es passte alles".** Drehung bestätigt.
-3. **Bogen mit gezeichnetem Rahmen (Zierecken) — gefahren.** 529 Zeilen, 33 Hübe, ~50 s, kein
-   Alarm, Endzustand sauber auf dem Arbeitsnullpunkt mit angehobenem Stift. Damit ist auch die
-   erweiterte Grenzprüfung (Rahmen + Text statt nur Text) einmal durch die echte Maschine
-   gegangen. **Die Sichtprüfung des Blattes steht noch aus.**
+3. **Bogen mit Zierecken — gefahren, vom Nutzer bestätigt:** Die eingezogenen Ecken lassen den
+   Text frei, und **der Rahmen wurde zuerst gezeichnet** (529 Zeilen, 33 Hübe, ~50 s).
+4. **Bogen mit Sprechblase, Zipfel links — gefahren** (537 Zeilen, 33 Hübe, ~50 s). Genau der
+   Fall, der als erster danebenlag.
+
+Beide Bögen ohne Alarm, Endzustand jeweils sauber auf dem Arbeitsnullpunkt mit angehobenem
+Stift. Damit ist auch die erweiterte Grenzprüfung (Rahmen **und** Text statt nur Text) durch die
+echte Maschine gegangen — der Zierrahmen liegt weiter außen als jeder Buchstabe, bei diesem
+Layout bis Y 99,5 von 105 fahrbaren Millimetern.
+
+**Etappe 3 und Etappe 4 sind damit vollständig auf Papier bestätigt.**
 
 ### Wenn du hier neu einsteigst
 
