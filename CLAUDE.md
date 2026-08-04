@@ -12,8 +12,13 @@ Repository: https://github.com/Emmpunkt/Write (öffentlich, MIT)
 
 ## ➜ AKTUELLER STAND (2026-08-04) — hier anfangen
 
-**Etappe 3 und Etappe 4 sind fertig und an der Maschine bestätigt.** 413 Tests grün. Zweig
-`absatzstile`, noch nicht nach `main` und noch nicht gepusht.
+**Etappe 3 und Etappe 4 sind fertig, an der Maschine bestätigt und veröffentlicht.**
+413 Tests grün, alles auf `main` und gepusht, **Release `v0.2`** mit APK
+(https://github.com/Emmpunkt/Write/releases/tag/v0.2).
+
+Die APK im Release ist mit dem **Debug-Schlüssel** signiert — das Projekt hat keine eigene
+Signatur. Für eine echte Release-Signatur bräuchte es einen Keystore, der dauerhaft verwahrt
+werden muss; wer ihn verliert, kann die App nur noch nach Deinstallation aktualisieren.
 
 Fertig: Etappen 1, 2a, 2b, **Etappe 3 komplett** (SD-Upload, Notizliste, Vorlagen mit
 Platzhaltern, Serienlauf, benannte Absatzstile) und **Etappe 4 „Gestalten"** (Text drehen,
