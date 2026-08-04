@@ -48,4 +48,8 @@ data class TemplateEntity(
     val rahmenHoeheMm: Float,
     /** Wie der Text im Rahmen steht - Name des Enums, wie bei der Ausrichtung. */
     val drehung: String,
+    /** Form des gezeichneten Rahmens, Abstand nach aussen und Zipfelseite der Sprechblase. */
+    val rahmenForm: String,
+    val rahmenAbstandMm: Float,
+    val zipfel: String,
 )

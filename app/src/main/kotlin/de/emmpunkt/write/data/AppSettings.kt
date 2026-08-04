@@ -10,12 +10,16 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import de.emmpunkt.write.core.decor.RahmenForm
+import de.emmpunkt.write.core.decor.Zipfelseite
+import de.emmpunkt.write.core.decor.rahmenZuege
 import de.emmpunkt.write.core.font.Fonts
 import de.emmpunkt.write.core.gcode.MachineProfile
 import de.emmpunkt.write.core.layout.Align
 import de.emmpunkt.write.core.layout.Drehung
 import de.emmpunkt.write.core.layout.Frame
 import de.emmpunkt.write.core.layout.Margins
+import de.emmpunkt.write.core.geometry.Polyline
 import de.emmpunkt.write.core.layout.TextStyle
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -68,6 +72,12 @@ data class AppSettings(
      * quer legt und den Text dreht.
      */
     val drehung: Drehung = Drehung.GRAD_0,
+
+    // Gezeichneter Rahmen: sitzt UM den Textrahmen, mit Abstand nach aussen. Dadurch bleibt der
+    // Textsatz voellig unberuehrt - Umbruch und Einpassen kennen ihn gar nicht.
+    val rahmenForm: RahmenForm = RahmenForm.KEINER,
+    val rahmenAbstandMm: Float = 4f,
+    val zipfel: Zipfelseite = Zipfelseite.UNTEN_LINKS,
 
     // Schrift. Schriftart, Groesse und Ausrichtung stehen NICHT mehr einzeln hier, sondern in
     // den Stilen - sonst gaebe es sie zweimal, einmal global und einmal je Stil. Was hier
@@ -217,6 +227,36 @@ data class AppSettings(
         margins = Margins.all(0f),
     )
 
+    /**
+     * Die Zuege des gezeichneten Rahmens - in RAHMEN-Koordinaten, wie der Textsatz.
+     *
+     * Der Rahmen umschliesst den Textkasten mit [rahmenAbstandMm] Luft; sein Ursprung liegt
+     * deshalb bei minus diesem Abstand. Auf den Tisch kommt er wie der Text ueber
+     * `toMachineProfile()` - beide durchlaufen dieselbe Verschiebung, also koennen sie gar
+     * nicht gegeneinander verrutschen.
+     */
+    fun zierrahmenZuege(): List<Polyline> {
+        val a = rahmenAbstandMm.coerceAtLeast(0f)
+        return rahmenZuege(rahmenForm, rahmenBreiteMm + 2 * a, rahmenHoeheMm + 2 * a, zipfel)
+            .map { it.translate(-a, -a) }
+    }
+
+    /**
+     * Ob der gezeichnete Rahmen noch aufs Blatt passt.
+     *
+     * Eigene Pruefung neben [rahmenPasstAufsBlatt]: Der Textkasten kann bequem passen und der
+     * Zierrahmen trotzdem ueber die Karte hinausragen - dann schriebe der Stift daneben auf
+     * den Tisch.
+     */
+    val zierrahmenPasstAufsBlatt: Boolean
+        get() {
+            if (rahmenForm == RahmenForm.KEINER) return true
+            val a = rahmenAbstandMm.coerceAtLeast(0f)
+            return rahmenXMm - a >= -0.01f && rahmenYMm - a >= -0.01f &&
+                rahmenXMm + rahmenBreiteMm + a <= paperWidthMm + 0.01f &&
+                rahmenYMm + rahmenHoeheMm + a <= paperHeightMm + 0.01f
+        }
+
     /** Blatt und Rahmen, wie die Vorschau sie braucht. */
     fun toBlattbild() = Blattbild(
         blattBreiteMm = paperWidthMm,
@@ -319,6 +359,11 @@ class SettingsRepository(private val context: Context) {
             rahmenHoeheMm = p[Keys.rahmenHoehe] ?: defaults.rahmenHoeheMm,
             drehung = p[Keys.drehung]?.let { runCatching { Drehung.valueOf(it) }.getOrNull() }
                 ?: defaults.drehung,
+            rahmenForm = p[Keys.rahmenForm]
+                ?.let { runCatching { RahmenForm.valueOf(it) }.getOrNull() } ?: defaults.rahmenForm,
+            rahmenAbstandMm = p[Keys.rahmenAbstand] ?: defaults.rahmenAbstandMm,
+            zipfel = p[Keys.zipfel]?.let { runCatching { Zipfelseite.valueOf(it) }.getOrNull() }
+                ?: defaults.zipfel,
             // Fehlen die Stile, stammen die Einstellungen aus der Zeit davor: dann bildet das
             // damalige Schriftbild den Grundstil. Die Vorgabe waere hier falsch - wer in 12 mm
             // Zierschrift geschrieben hat, faende nach dem Update 7 mm Allure vor.
@@ -370,6 +415,9 @@ class SettingsRepository(private val context: Context) {
             p[Keys.rahmenBreite] = s.rahmenBreiteMm
             p[Keys.rahmenHoehe] = s.rahmenHoeheMm
             p[Keys.drehung] = s.drehung.name
+            p[Keys.rahmenForm] = s.rahmenForm.name
+            p[Keys.rahmenAbstand] = s.rahmenAbstandMm
+            p[Keys.zipfel] = s.zipfel.name
             p[Keys.stile] = stileAlsText(s.stile)
             p[Keys.lineSpacing] = s.lineSpacing
             p[Keys.letterSpacing] = s.letterSpacing
@@ -401,6 +449,9 @@ class SettingsRepository(private val context: Context) {
         val rahmenBreite = floatPreferencesKey("rahmen_breite")
         val rahmenHoehe = floatPreferencesKey("rahmen_hoehe")
         val drehung = stringPreferencesKey("drehung")
+        val rahmenForm = stringPreferencesKey("rahmen_form")
+        val rahmenAbstand = floatPreferencesKey("rahmen_abstand")
+        val zipfel = stringPreferencesKey("zipfel")
         val stile = stringPreferencesKey("stile")
 
         // Nur noch zum LESEN: aus ihnen entsteht der Grundstil, wenn "stile" fehlt.

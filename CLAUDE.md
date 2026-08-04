@@ -12,30 +12,20 @@ Repository: https://github.com/Emmpunkt/Write (öffentlich, MIT)
 
 ## ➜ AKTUELLER STAND (2026-08-04) — hier anfangen
 
-**Etappe 3 ist vollständig fertig.** 319 Tests grün, am Gerät verifiziert (Migration, Stile
-anlegen/zuweisen/umbenennen, Neustart). Zweig `absatzstile`.
+**Etappe 3 und Etappe 4 sind gebaut.** 408 Tests grün, alles am Gerät verifiziert. Zweig
+`absatzstile`, noch nicht nach `main` und noch nicht gepusht.
 
-Fertig: Etappen 1, 2a, 2b und **Etappe 3 komplett** (SD-Upload, Notizliste, Vorlagen mit
-Platzhaltern, Serienlauf, **benannte Absatzstile**) — dazu die beiden Korrekturrunden vom
-2026-08-04, mit denen Blatt und Textrahmen getrennt wurden.
+Fertig: Etappen 1, 2a, 2b, **Etappe 3 komplett** (SD-Upload, Notizliste, Vorlagen mit
+Platzhaltern, Serienlauf, benannte Absatzstile) und **Etappe 4 „Gestalten"** (Text drehen,
+gezeichnete Rahmen).
 
-**Der Nutzer hat am 2026-08-04 an der Maschine bestätigt, dass der Rahmenversatz auf dem Papier
-dort landet, wo er soll.**
+**Das eine, was noch aussteht: die Maschine.** Weder die Absatzstile noch die Drehung noch die
+Rahmen sind auf Papier gefahren. Drei Bögen wären zu prüfen:
 
-### Offen: Etappe 4 „Gestalten"
-
-Zwei Wünsche des Nutzers vom 2026-08-04, beide durchgesprochen und entschieden:
-
-1. **Text in 90°-Schritten drehen.** Anlass: A6 hoch (105 × 148) passt nicht auf den Tisch
-   (155 × 105). Wer hochkant schreiben will, legt das Blatt quer und dreht den Text. Entschieden:
-   vier Knöpfe (0/90/180/270), **der Satz dreht sich im Rahmen, nicht der Rahmen** — bei 90/270
-   wird auf einer Fläche mit vertauschten Maßen gesetzt und hineingedreht.
-2. **Gezeichnete Zierrahmen**: Rechteck, Doppellinie, abgerundet, Sprechblase, Zierecken.
-   Entschieden: **um den Textrahmen mit einstellbarem Abstand** (der Textsatz bleibt unberührt)
-   und **selbst gerechnet** statt als Grafiken mitgeliefert (verzerrungsfrei bei jedem
-   Seitenverhältnis, keine Lizenzfrage).
-
-Der Plan dazu steht in `docs/superpowers/specs/` bzw. im Plan der Sitzung.
+1. Große zentrierte Überschrift über kleinem Fließtext — sitzt der Abstand zur ersten Textzeile?
+2. Ein hochkant gedrehter Bogen — steht der Text da, wo die Vorschau ihn zeigt?
+3. Ein Bogen mit Sprechblase — sitzt der Rahmen richtig um den Text, und bleibt er auf dem
+   Papier?
 
 ### Wenn du hier neu einsteigst
 
@@ -440,6 +430,65 @@ Feldtrenner, Zuordnung als Komma-Liste von Indizes. Ein unlesbarer Zuordnungsein
 Neustart überstanden (`Text|zierschrift|14.3|LEFT\nStil 2|zierschrift|7.4|LEFT`, Zuordnung
 `0,1`). **Noch nicht an der Maschine gefahren.**
 
+## Etappe 4 „Gestalten" (2026-08-04)
+
+Zwei Wünsche des Nutzers, in derselben Sitzung durchgesprochen und gebaut.
+
+### Teil 1: Text in 90°-Schritten drehen
+
+Anlass ist die Maschine, nicht der Geschmack: **A6 hoch (105 × 148 mm) passt nicht auf den
+Tisch (155 × 105 mm).** Wer hochkant schreiben will, legt das Blatt quer und dreht den Text.
+
+**Gedreht wird der SATZ im Rahmen, nicht der Rahmen.** Bei 90°/270° wird auf einer Fläche mit
+vertauschten Maßen gesetzt und das Ergebnis hineingekippt — als letzter Schritt über die
+fertigen Züge. Dadurch braucht der ganze Umbruch, die Ausrichtung und die Einlauf-Korrektur von
+der Drehung nichts zu wissen. Die Ränder drehen mit.
+
+Vier Stufen statt eines freien Winkels, weil das gedrehte Rechteck achsparallel bleibt und
+damit „passt das noch aufs Blatt?" exakt beantwortbar. **90° dreht gegen den Uhrzeigersinn** —
+die erste Zeile kippt nach links.
+
+Vorschau und G-Code brauchten **keine** Änderung: beide arbeiten auf denselben fertigen
+Strichzügen. Genau dafür ist diese Invariante da.
+
+### Teil 2: Gezeichnete Rahmen
+
+Fünf Formen (`core/decor/Zierrahmen.kt`): Rechteck, Doppellinie, abgerundet, Sprechblase mit
+wählbarer Zipfelseite, Zierecken (eingezogene Ecken).
+
+Zwei Entscheidungen des Nutzers:
+
+- **Um den Textrahmen, mit einstellbarem Abstand.** Der Textsatz bleibt dadurch völlig
+  unberührt — Umbruch und Einpassen kennen den Rahmen gar nicht.
+- **Selbst gerechnet statt als Grafik mitgeliefert.** Eine fertige Zeichnung müsste auf jedes
+  Seitenverhältnis gedehnt werden, und ein in die Länge gezogener Schnörkel sieht sofort falsch
+  aus. Gerechnet richten sich Eckradius und Zier nach der **kürzeren** Seite und bleiben
+  dadurch unverzerrt.
+
+Was beim Bauen nicht offensichtlich war:
+
+1. **Bögen werden an der Größe bemessen aufgelöst**, nicht mit fester Punktzahl (Sehnenfehler
+   unter 0,05 mm). Sonst bekäme ein kleiner Bogen unnötig viele G-Code-Zeilen und ein großer
+   würde sichtbar eckig.
+2. **Der Mittelpunkt jedes Eckbogens liegt in der Ecke selbst.** Der erste Versuch setzte die
+   Bögen frei und ließ Bogenanfang und Kantenende auseinanderlaufen — im Musterbild sah man
+   schiefe Kanten und zufällige Halbkreise. Mit dem Mittelpunkt in der Ecke treffen sie
+   zwangsläufig aufeinander.
+3. **`orderedStrokes` liest aus `LaidOutText.lines`, nicht aus `strokes`.** Ein Rahmen steht in
+   keiner Zeile und fiel deshalb stillschweigend aus dem G-Code. Dafür gibt es jetzt
+   `plotJobAus(zuege, profil)`; das ViewModel legt Rahmen und Text selbst zusammen — **Rahmen
+   zuerst**, weil ein paar lange Züge am Anfang sofort zeigen, ob das Blatt richtig liegt.
+4. **Die Grenzprüfung bekommt die GESAMTEN Züge.** Der Rahmen liegt weiter außen als jeder
+   Buchstabe; prüfte man nur den Text, schlüge das Softlimit erst mitten im Auftrag zu — mit
+   halb beschriebenem Blatt. Dazu die eigene Warnung `zierrahmenPasstAufsBlatt`: Der Textkasten
+   kann bequem passen und der Rahmen darum trotzdem über die Karte hinausragen.
+
+Room **6 → 7** (drei Spalten, kein Tabellenumbau). Vorhandene Vorlagen bekommen keinen Rahmen.
+
+**Am Gerät geprüft (2026-08-04):** Migrationen liefen, Sprechblase umschließt den Textrahmen mit
+Abstand, Zipfelseite wählbar, Kennzahlen enthalten den Rahmen. Danach wieder auf „kein Rahmen"
+gestellt. **Noch nicht an der Maschine gefahren.**
+
 ## Bekannte offene Punkte
 
 - ~~Die Schrift „Allure" gefällt dem Nutzer nicht~~ **Erledigt (2026-08-03): Allure bleibt.**
@@ -451,9 +500,8 @@ Neustart überstanden (`Text|zierschrift|14.3|LEFT\nStil 2|zierschrift|7.4|LEFT`
   Geschätzt 59 s, real 30–45 s. Ausdrücklich hinten angestellt („die Zeitschätzung ist mir
   nicht wichtig"). Das braucht eine Messreihe über mehrere Schriften und Größen, keine
   Nachjustierung an einem einzelnen Wert.
-- **Etappe 3 Teil 4 ist gebaut**, aber noch nicht an der Maschine gefahren. Ein Bogen mit
-  großer Überschrift über kleinem Fließtext steht aus — nachmessen, ob der Abstand zur ersten
-  Textzeile stimmt.
+- **Etappe 3 Teil 4 und Etappe 4 sind gebaut, aber nie auf Papier gefahren.** Siehe die drei
+  Bögen im Stand-Abschnitt ganz oben.
 - Keine automatische Silbentrennung (bewusst): Sie bräuchte Sprachwissen und läge bei
   zusammengesetzten Wörtern regelmäßig daneben. Stattdessen wirkt ein vom Nutzer gesetzter
   Bindestrich als Trennstelle, und hart getrennte Wörter werden im Editor rot markiert.

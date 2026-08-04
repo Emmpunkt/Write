@@ -1,5 +1,7 @@
 package de.emmpunkt.write.data
 
+import de.emmpunkt.write.core.decor.RahmenForm
+import de.emmpunkt.write.core.decor.Zipfelseite
 import de.emmpunkt.write.core.layout.Align
 import de.emmpunkt.write.core.layout.Drehung
 
@@ -134,6 +136,9 @@ fun AppSettings.mitVorlage(v: TemplateEntity): AppSettings = copy(
     rahmenBreiteMm = v.rahmenBreiteMm,
     rahmenHoeheMm = v.rahmenHoeheMm,
     drehung = runCatching { Drehung.valueOf(v.drehung) }.getOrDefault(Drehung.GRAD_0),
+    rahmenForm = runCatching { RahmenForm.valueOf(v.rahmenForm) }.getOrDefault(RahmenForm.KEINER),
+    rahmenAbstandMm = v.rahmenAbstandMm,
+    zipfel = runCatching { Zipfelseite.valueOf(v.zipfel) }.getOrDefault(Zipfelseite.UNTEN_LINKS),
 )
 
 /** Der umgekehrte Weg: aus dem Arbeitszustand wird wieder eine Vorlage zum Speichern. */
@@ -161,6 +166,9 @@ fun AppSettings.zuVorlage(
     rahmenBreiteMm = rahmenBreiteMm,
     rahmenHoeheMm = rahmenHoeheMm,
     drehung = drehung.name,
+    rahmenForm = rahmenForm.name,
+    rahmenAbstandMm = rahmenAbstandMm,
+    zipfel = zipfel.name,
 )
 
 /**

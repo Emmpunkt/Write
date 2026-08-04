@@ -2,11 +2,15 @@ package de.emmpunkt.write.core.debug
 
 import de.emmpunkt.write.core.font.Fonts
 import de.emmpunkt.write.core.gcode.MachineProfile
+import de.emmpunkt.write.core.gcode.plotJobAus
 import de.emmpunkt.write.core.gcode.toPlotJob
 import de.emmpunkt.write.core.layout.Align
 import de.emmpunkt.write.core.layout.Frame
 import de.emmpunkt.write.core.layout.Margins
 import de.emmpunkt.write.core.layout.TextStyle
+import de.emmpunkt.write.core.decor.RahmenForm
+import de.emmpunkt.write.core.decor.Zipfelseite
+import de.emmpunkt.write.core.decor.rahmenZuege
 import de.emmpunkt.write.core.layout.AbsatzSatz
 import de.emmpunkt.write.core.layout.Drehung
 import de.emmpunkt.write.core.layout.fitSize
@@ -62,6 +66,19 @@ class PreviewSamplesTest {
         )
         println("$name: ${GCodeRenderer.summary(job.lines, penDownZ)}, ${job.penDownCount} Huebe, " +
             "ca. ${job.estimatedSeconds.toInt()} s, Ueberlauf=${laid.overflow}")
+        return target
+    }
+
+    /** Zeichnet fertige Strichzuege - fuer alles, was kein Text ist. */
+    private fun rendereZuege(name: String, zuege: List<de.emmpunkt.write.core.geometry.Polyline>, frame: Frame): File {
+        val job = plotJobAus(zuege, profile)
+        val target = File(outDir, "$name.png")
+        GCodeRenderer.renderPng(
+            lines = job.lines, penDownZ = penDownZ,
+            widthMm = frame.widthMm, heightMm = frame.heightMm,
+            target = target, pixelsPerMm = 8, showTravel = false,
+        )
+        println("$name: ${job.penDownCount} Huebe, ${job.lines.size} Zeilen")
         return target
     }
 
@@ -187,6 +204,25 @@ class PreviewSamplesTest {
         Drehung.entries.forEach { drehung ->
             rendereAbsaetze("21-drehung-${drehung.grad}", einladung, a6quer, drehung = drehung)
         }
+
+        // Die gezeichneten Rahmen, jeder um denselben Textkasten.
+        val kasten = Frame(120f, 80f, Margins.all(0f))
+        RahmenForm.entries.filter { it != RahmenForm.KEINER }.forEach { form ->
+            rendereZuege("22-rahmen-${form.name.lowercase()}", rahmenZuege(form, 120f, 80f), kasten)
+        }
+        Zipfelseite.entries.forEach { seite ->
+            rendereZuege(
+                "23-blase-${seite.name.lowercase()}",
+                rahmenZuege(RahmenForm.SPRECHBLASE, 120f, 80f, seite),
+                kasten,
+            )
+        }
+        // Und ein schmaler Kasten - dort zeigt sich, ob die Zier verzerrt.
+        rendereZuege(
+            "24-zierecken-schmal",
+            rahmenZuege(RahmenForm.ZIERECKEN, 200f, 45f),
+            Frame(200f, 45f, Margins.all(0f)),
+        )
 
         val erzeugt = outDir.listFiles { f: File -> f.extension == "png" }?.size ?: 0
         assertTrue(erzeugt >= 30, "Es wurden nur $erzeugt Musterbilder erzeugt")

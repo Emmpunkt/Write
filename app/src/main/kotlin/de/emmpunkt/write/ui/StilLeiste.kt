@@ -41,6 +41,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import de.emmpunkt.write.core.decor.RahmenForm
+import de.emmpunkt.write.core.decor.Zipfelseite
 import de.emmpunkt.write.core.font.Fonts
 import de.emmpunkt.write.core.layout.Align
 import de.emmpunkt.write.core.layout.Drehung
@@ -418,6 +420,34 @@ private fun Rahmenfelder(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AuswahlFeld(
+            label = "Gezeichneter Rahmen",
+            selected = settings.rahmenForm.bezeichnung,
+            options = RahmenForm.entries.map { it.bezeichnung },
+            onSelect = { i -> onChange { it.copy(rahmenForm = RahmenForm.entries[i]) } },
+            modifier = Modifier.weight(1.4f),
+        )
+        if (settings.rahmenForm != RahmenForm.KEINER) {
+            ZahlFeld("Abstand (mm)", settings.rahmenAbstandMm, Modifier.weight(1f)) { v ->
+                onChange { it.copy(rahmenAbstandMm = v) }
+            }
+        }
+    }
+    if (settings.rahmenForm == RahmenForm.SPRECHBLASE) {
+        AuswahlFeld(
+            label = "Zipfel",
+            selected = settings.zipfel.bezeichnung,
+            options = Zipfelseite.entries.map { it.bezeichnung },
+            onSelect = { i -> onChange { it.copy(zipfel = Zipfelseite.entries[i]) } },
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
         Drehung.entries.forEachIndexed { index, drehung ->
             SegmentedButton(

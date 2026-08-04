@@ -245,7 +245,18 @@ fun generateGCode(machineStrokes: List<Polyline>, profile: MachineProfile): Plot
 
 /** Bequemer Weg vom Satz zum Auftrag: ordnen, verschieben, umwandeln. */
 fun LaidOutText.toPlotJob(profile: MachineProfile): PlotJob =
-    generateGCode(orderedStrokes(profile).toMachineCoordinates(profile), profile)
+    plotJobAus(orderedStrokes(profile), profile)
+
+/**
+ * Auftrag aus fertigen Blatt-Zuegen - fuer alles, was zum Text noch dazukommt.
+ *
+ * Der Weg fuer Text plus Dekoration: Ein gezeichneter Rahmen steht in keinem [LaidOutLine], und
+ * [orderedStrokes] liest nur aus den Zeilen. Wer beides plotten will, legt die Zuege selbst
+ * zusammen und uebergibt sie hier - die Reihenfolge der Liste ist die Reihenfolge auf dem
+ * Papier.
+ */
+fun plotJobAus(zuege: List<Polyline>, profile: MachineProfile): PlotJob =
+    generateGCode(zuege.toMachineCoordinates(profile), profile)
 
 /**
  * Dauer einer einzelnen Bewegung, die aus dem Stand beginnt und wieder zum Stehen kommt.

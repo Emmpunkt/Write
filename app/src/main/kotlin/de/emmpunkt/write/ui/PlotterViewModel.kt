@@ -7,7 +7,10 @@ import de.emmpunkt.write.core.font.Fonts
 import de.emmpunkt.write.core.gcode.MachineLimits
 import de.emmpunkt.write.core.gcode.PlotJob
 import de.emmpunkt.write.core.gcode.applying
+import de.emmpunkt.write.core.gcode.orderedStrokes
+import de.emmpunkt.write.core.gcode.plotJobAus
 import de.emmpunkt.write.core.gcode.toPlotJob
+import de.emmpunkt.write.core.geometry.Polyline
 import de.emmpunkt.write.core.layout.LaidOutText
 import de.emmpunkt.write.core.layout.absaetzeAus
 import de.emmpunkt.write.core.layout.fitSkalierung
@@ -64,6 +67,13 @@ import kotlinx.coroutines.launch
 /** Was der Editor gerade anzeigt: Satz, Auftrag und die daraus folgenden Hinweise. */
 data class DocumentState(
     val laidOut: LaidOutText? = null,
+    /**
+     * Alles, was auf das Blatt kommt: erst der gezeichnete Rahmen, dann der Text.
+     *
+     * Der Rahmen zuerst - ein paar lange Zuege am Anfang zeigen sofort, ob das Blatt richtig
+     * liegt, bevor Hunderte Zeilen Text laufen.
+     */
+    val zuege: List<Polyline> = emptyList(),
     val job: PlotJob? = null,
     /** Zeichen im Text, die die gewaehlte Schrift nicht kennt. */
     val unsupported: Set<Int> = emptySet(),
@@ -397,9 +407,12 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
                 s.toFrame(),
                 s.drehung,
             )
-            val job = laid.toPlotJob(s.toMachineProfile().applying(maschinenwerte))
+            val profil = s.toMachineProfile().applying(maschinenwerte)
+            val alle = s.zierrahmenZuege() + laid.orderedStrokes(profil)
+            val job = plotJobAus(alle, profil)
             DocumentState(
                 laidOut = laid,
+                zuege = alle,
                 job = job,
                 unsupported = laid.unsupported,
                 overlongWords = laid.overlongWords,
@@ -845,7 +858,11 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
 
         // Die Vorpruefung bekommt die Zuege in Blatt-Koordinaten; den Papier-Offset rechnet
         // sie selbst dazu, damit sie genau die Koordinaten prueft, die spaeter gefahren werden.
-        val blattStrokes = laid.strokes
+        //
+        // WICHTIG: die GESAMTEN Zuege, nicht nur den Text. Der gezeichnete Rahmen liegt weiter
+        // aussen als jeder Buchstabe; pruefte man nur den Text, schlage das Softlimit erst
+        // mitten im Auftrag zu - mit halb beschriebenem Blatt.
+        val blattStrokes = doc.zuege
         val fluss = if (ueberSdKarte) {
             c.plotViaSd(job, blattStrokes, sdTransfer())
         } else {
@@ -913,13 +930,15 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
             )
         }.getOrElse { return Result.failure(it) }
 
-        val job = laid.toPlotJob(s.toMachineProfile().applying(maschinenwerte))
+        val profil = s.toMachineProfile().applying(maschinenwerte)
+        val alle = s.zierrahmenZuege() + laid.orderedStrokes(profil)
+        val job = plotJobAus(alle, profil)
         if (job.penDownCount == 0) {
             return Result.failure(IllegalStateException("Der Bogen enthält nichts zu zeichnen."))
         }
 
         val fluss = if (ueberSdKarte) {
-            c.plotViaSd(job, laid.strokes, sdTransfer())
+            c.plotViaSd(job, alle, sdTransfer())
         } else {
             c.plot(job, laid.strokes)
         }

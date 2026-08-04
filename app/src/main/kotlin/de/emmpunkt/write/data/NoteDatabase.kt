@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [NoteEntity::class, TemplateEntity::class], version = 6, exportSchema = false)
+@Database(entities = [NoteEntity::class, TemplateEntity::class], version = 7, exportSchema = false)
 abstract class NoteDatabase : RoomDatabase() {
 
     abstract fun notes(): RoomNoteDao
@@ -219,6 +219,28 @@ abstract class NoteDatabase : RoomDatabase() {
         }
 
         /**
+         * Version 6 -> 7: Die Vorlage bekommt ihren gezeichneten Rahmen.
+         *
+         * Drei Spalten, kein Tabellenumbau. Vorhandene Vorlagen bekommen keinen Rahmen - alles
+         * andere waere eine Aenderung am Ergebnis, die niemand angeordnet hat.
+         */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `templates` ADD COLUMN `rahmenForm` TEXT NOT NULL " +
+                        "DEFAULT 'KEINER'",
+                )
+                db.execSQL(
+                    "ALTER TABLE `templates` ADD COLUMN `rahmenAbstandMm` REAL NOT NULL DEFAULT 4",
+                )
+                db.execSQL(
+                    "ALTER TABLE `templates` ADD COLUMN `zipfel` TEXT NOT NULL " +
+                        "DEFAULT 'UNTEN_LINKS'",
+                )
+            }
+        }
+
+        /**
          * Eine Datenbank fuer die ganze App.
          *
          * Room haelt Verbindungen und einen Zwischenspeicher; zwei Instanzen auf derselben
@@ -231,6 +253,7 @@ abstract class NoteDatabase : RoomDatabase() {
                 "write_notes.db",
             ).addMigrations(
                 MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+                MIGRATION_6_7,
             )
                 .build().also { instanz = it }
         }

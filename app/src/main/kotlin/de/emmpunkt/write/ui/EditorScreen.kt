@@ -165,7 +165,9 @@ fun EditorScreen(
                     )
                 }
                 PreviewCanvas(
-                    strokes = document.laidOut?.strokes.orEmpty(),
+                    // Die Gesamtzuege: Rahmen und Text. Die Vorschau zeigt damit genau das,
+                    // was der Stift faehrt - dieselbe Liste geht in den G-Code.
+                    strokes = document.zuege,
                     blattbild = settings.toBlattbild(),
                     modifier = Modifier.height(200.dp),
                     showTravel = showTravel,
@@ -221,6 +223,13 @@ private fun Hinweise(document: DocumentState, settings: AppSettings) {
         Warnung(
             "Der Textrahmen ragt über das Blatt hinaus " +
                 "(${settings.paperWidthMm.fmt()} × ${settings.paperHeightMm.fmt()} mm).",
+        )
+    } else if (!settings.zierrahmenPasstAufsBlatt) {
+        // Nur wenn der Textrahmen selbst passt - sonst staenden zwei Warnungen fuer dieselbe
+        // Ursache untereinander.
+        Warnung(
+            "Der gezeichnete Rahmen ragt über das Blatt hinaus. Abstand verkleinern oder den " +
+                "Textrahmen weiter nach innen setzen.",
         )
     }
 }

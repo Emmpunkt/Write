@@ -1,5 +1,7 @@
 package de.emmpunkt.write.data
 
+import de.emmpunkt.write.core.decor.RahmenForm
+import de.emmpunkt.write.core.geometry.boundingBox
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -122,5 +124,49 @@ class BlattUndRahmenTest {
         assertEquals(89f, s.toFrame().usableHeightMm)
         assertEquals(8f, s.toMachineProfile().paperOffsetXMm)
         assertEquals(8f, s.toMachineProfile().paperOffsetYMm)
+    }
+
+    // ---- Gezeichneter Rahmen ----
+
+    @Test
+    fun `ohne Rahmenform wird nichts gezeichnet`() {
+        assertEquals(emptyList(), AppSettings().zierrahmenZuege())
+    }
+
+    @Test
+    fun `der gezeichnete Rahmen umschliesst den Textkasten mit Abstand`() {
+        val s = AppSettings(
+            rahmenXMm = 10f, rahmenYMm = 10f,
+            rahmenBreiteMm = 100f, rahmenHoeheMm = 60f,
+            rahmenForm = RahmenForm.RECHTECK, rahmenAbstandMm = 5f,
+        )
+        val box = s.zierrahmenZuege().boundingBox()!!
+
+        // In RAHMEN-Koordinaten: der Kasten liegt bei 0..100 / 0..60, der Rahmen 5 mm darum.
+        assertEquals(-5f, box.minX, 0.01f)
+        assertEquals(-5f, box.minY, 0.01f)
+        assertEquals(105f, box.maxX, 0.01f)
+        assertEquals(65f, box.maxY, 0.01f)
+    }
+
+    @Test
+    fun `ein Rahmen, der ueber das Blatt ragt, wird gemeldet`() {
+        // Der Textkasten passt bequem, der Rahmen darum aber nicht mehr - genau der Fall, der
+        // den Stift sonst neben die Karte auf den Tisch schreiben liesse.
+        val s = AppSettings(
+            paperWidthMm = 100f, paperHeightMm = 100f,
+            rahmenXMm = 2f, rahmenYMm = 2f,
+            rahmenBreiteMm = 96f, rahmenHoeheMm = 96f,
+            rahmenForm = RahmenForm.RECHTECK, rahmenAbstandMm = 5f,
+        )
+
+        assertTrue(s.rahmenPasstAufsBlatt, "Der Textkasten selbst passt")
+        assertFalse(s.zierrahmenPasstAufsBlatt, "Der Rahmen darum passt nicht mehr")
+    }
+
+    @Test
+    fun `ohne Rahmenform ist die Blattpruefung immer zufrieden`() {
+        val s = AppSettings(rahmenXMm = 0f, rahmenYMm = 0f, rahmenAbstandMm = 50f)
+        assertTrue(s.zierrahmenPasstAufsBlatt)
     }
 }

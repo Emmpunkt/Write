@@ -1,5 +1,7 @@
 package de.emmpunkt.write.data
 
+import de.emmpunkt.write.core.decor.RahmenForm
+import de.emmpunkt.write.core.decor.Zipfelseite
 import de.emmpunkt.write.core.layout.Align
 import de.emmpunkt.write.core.layout.Drehung
 import kotlin.test.Test
@@ -26,6 +28,9 @@ class VorlageUmwandlungTest {
         rahmenBreiteMm = 100f,
         rahmenHoeheMm = 70f,
         drehung = Drehung.GRAD_0.name,
+        rahmenForm = RahmenForm.KEINER.name,
+        rahmenAbstandMm = 4f,
+        zipfel = Zipfelseite.UNTEN_LINKS.name,
     )
 
     @Test
@@ -126,6 +131,26 @@ class VorlageUmwandlungTest {
     fun `eine unbekannte Drehung faellt auf aufrecht zurueck`() {
         val kaputt = vorlage().copy(drehung = "KOPFUEBER")
         assertEquals(Drehung.GRAD_0, vorgabe.mitVorlage(kaputt).drehung)
+    }
+
+    @Test
+    fun `der gezeichnete Rahmen wandert mit der Vorlage`() {
+        val mitRahmen = vorlage().copy(
+            rahmenForm = RahmenForm.SPRECHBLASE.name,
+            rahmenAbstandMm = 6f,
+            zipfel = Zipfelseite.RECHTS.name,
+        )
+        val s = vorgabe.mitVorlage(mitRahmen)
+
+        assertEquals(RahmenForm.SPRECHBLASE, s.rahmenForm)
+        assertEquals(6f, s.rahmenAbstandMm)
+        assertEquals(Zipfelseite.RECHTS, s.zipfel)
+    }
+
+    @Test
+    fun `eine unbekannte Rahmenform faellt auf keinen Rahmen zurueck`() {
+        val kaputt = vorlage().copy(rahmenForm = "BAROCK")
+        assertEquals(RahmenForm.KEINER, vorgabe.mitVorlage(kaputt).rahmenForm)
     }
 
     @Test

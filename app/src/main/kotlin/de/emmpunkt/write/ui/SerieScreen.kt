@@ -168,7 +168,7 @@ fun SerieScreen(
         serie.vorschau?.let { laid ->
             Text("Vorschau: Bogen 1", style = MaterialTheme.typography.labelLarge)
             PreviewCanvas(
-                strokes = laid.strokes,
+                strokes = serie.settings.zierrahmenZuege() + laid.strokes,
                 blattbild = serie.settings.toBlattbild(),
                 // PreviewCanvas hat keine eigene Hoehe - ohne diese Angabe faellt sie auf ihre
                 // Polsterung zusammen. Derselbe Wert wie im Editor, damit beide gleich wirken.
