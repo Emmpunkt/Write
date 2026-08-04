@@ -7,8 +7,9 @@ import de.emmpunkt.write.core.layout.Align
 import de.emmpunkt.write.core.layout.Frame
 import de.emmpunkt.write.core.layout.Margins
 import de.emmpunkt.write.core.layout.TextStyle
+import de.emmpunkt.write.core.layout.AbsatzSatz
 import de.emmpunkt.write.core.layout.fitSize
-import de.emmpunkt.write.core.layout.layoutText
+import de.emmpunkt.write.core.layout.layoutAbsaetze
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -32,9 +33,20 @@ class PreviewSamplesTest {
         style: TextStyle,
         frame: Frame,
         showTravel: Boolean = false,
+    ): File = rendereAbsaetze(
+        name,
+        text.split('\n').map { AbsatzSatz(it, style, Fonts.load(style.fontId)) },
+        frame,
+        showTravel,
+    )
+
+    private fun rendereAbsaetze(
+        name: String,
+        absaetze: List<AbsatzSatz>,
+        frame: Frame,
+        showTravel: Boolean = false,
     ): File {
-        val font = Fonts.load(style.fontId)
-        val laid = layoutText(text, style, frame, font)
+        val laid = layoutAbsaetze(absaetze, frame)
         val job = laid.toPlotJob(profile)
         val target = File(outDir, "$name.png")
         GCodeRenderer.renderPng(
@@ -133,6 +145,32 @@ class PreviewSamplesTest {
         val eingepasst = fitSize(zuViel, TextStyle("script-simplex"), a6quer, Fonts.load("script-simplex"))
         render("18-eingepasst", zuViel, TextStyle("script-simplex", sizeMm = eingepasst.sizeMm), a6quer)
         println("Eingepasst auf ${eingepasst.sizeMm} mm (passt=${eingepasst.fits})")
+
+        // Gemischte Stile je Absatz: grosse zentrierte Ueberschrift ueber kleinem Fliesstext.
+        // Hier sieht man die Vorschubregel am Absatzwechsel - der Abstand richtet sich nach der
+        // groesseren der beiden Zeilen, sonst sackte der Text in die Unterlaengen des Titels.
+        rendereAbsaetze(
+            "20-absatzstile",
+            listOf(
+                AbsatzSatz(
+                    "Einladung",
+                    TextStyle("allure", sizeMm = 12f, align = Align.CENTER),
+                    Fonts.load("allure"),
+                ),
+                AbsatzSatz("", TextStyle("sans", sizeMm = 5f), Fonts.load("sans")),
+                AbsatzSatz(
+                    "Wir feiern am Samstag ab 18 Uhr im Garten. Bring bitte gute Laune mit.",
+                    TextStyle("sans", sizeMm = 5f),
+                    Fonts.load("sans"),
+                ),
+                AbsatzSatz(
+                    "Anna & Jonas",
+                    TextStyle("allure", sizeMm = 7f, align = Align.RIGHT),
+                    Fonts.load("allure"),
+                ),
+            ),
+            a6quer,
+        )
 
         val erzeugt = outDir.listFiles { f: File -> f.extension == "png" }?.size ?: 0
         assertTrue(erzeugt >= 30, "Es wurden nur $erzeugt Musterbilder erzeugt")

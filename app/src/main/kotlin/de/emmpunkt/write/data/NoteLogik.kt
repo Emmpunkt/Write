@@ -21,24 +21,28 @@ fun titelVon(text: String, maxLaenge: Int = 40): String {
 }
 
 /**
- * Die Ausrichtung als Enum.
+ * Die Stile der Notiz, garantiert nicht leer.
  *
- * Steht in der Datenbank ein unbekannter Name - etwa weil der Enum spaeter umbenannt wurde -
- * gilt die Vorgabe. Ein Absturz beim Oeffnen einer alten Notiz waere die schlechtere Antwort.
+ * Steht in der Datenbank Unbrauchbares - etwa ein Rest aus einer aelteren Fassung - gilt der
+ * Grundstil. Ein Absturz beim Oeffnen einer alten Notiz waere die schlechtere Antwort.
  */
-fun NoteEntity.alignEnum(): Align =
-    runCatching { Align.valueOf(align) }.getOrElse { AppSettings().align }
+fun NoteEntity.stilListe(): List<Absatzstil> =
+    stileAusText(stile).ifEmpty { listOf(AppSettings.GRUNDSTIL) }
+
+/** Die Absatzzuordnung der Notiz. */
+fun NoteEntity.zuordnung(): List<Int> = zuordnungAusText(absatzZuordnung)
 
 /**
  * Legt das Schriftbild der Notiz ueber die Einstellungen.
  *
  * Alles andere - Blatt, Raender, Offset, Maschine - bleibt unangetastet. Das ist der
  * entscheidende Punkt: ein Notizwechsel aendert die Gestaltung, nicht die Einrichtung.
+ *
+ * Die Absatzzuordnung kommt NICHT mit: sie gehoert zum Text, nicht zum Schriftbild, und wird
+ * neben ihm gefuehrt (siehe [zuordnung]).
  */
 fun AppSettings.mitNotiz(note: NoteEntity): AppSettings = copy(
-    fontId = note.fontId,
-    sizeMm = note.sizeMm,
-    align = note.alignEnum(),
+    stile = note.stilListe(),
     lineSpacing = note.lineSpacing,
     letterSpacing = note.letterSpacing,
     wordSpacing = note.wordSpacing,
@@ -46,13 +50,17 @@ fun AppSettings.mitNotiz(note: NoteEntity): AppSettings = copy(
 )
 
 /** Der umgekehrte Weg: aus dem Arbeitszustand wird wieder eine Notiz zum Speichern. */
-fun AppSettings.zuNotiz(id: Long, text: String, jetzt: Long) = NoteEntity(
+fun AppSettings.zuNotiz(
+    id: Long,
+    text: String,
+    jetzt: Long,
+    zuordnung: List<Int> = emptyList(),
+) = NoteEntity(
     id = id,
     text = text,
     updatedAt = jetzt,
-    fontId = fontId,
-    sizeMm = sizeMm,
-    align = align.name,
+    stile = stileAlsText(stile),
+    absatzZuordnung = zuordnungAlsText(zuordnung),
     lineSpacing = lineSpacing,
     letterSpacing = letterSpacing,
     wordSpacing = wordSpacing,

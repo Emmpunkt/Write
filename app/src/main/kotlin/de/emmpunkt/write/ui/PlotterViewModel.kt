@@ -9,8 +9,10 @@ import de.emmpunkt.write.core.gcode.PlotJob
 import de.emmpunkt.write.core.gcode.applying
 import de.emmpunkt.write.core.gcode.toPlotJob
 import de.emmpunkt.write.core.layout.LaidOutText
-import de.emmpunkt.write.core.layout.fitSize
-import de.emmpunkt.write.core.layout.layoutText
+import de.emmpunkt.write.core.layout.absaetzeAus
+import de.emmpunkt.write.core.layout.fitSkalierung
+import de.emmpunkt.write.core.layout.layoutAbsaetze
+import de.emmpunkt.write.core.layout.skaliert
 import java.util.Locale
 import de.emmpunkt.write.data.AppSettings
 import de.emmpunkt.write.data.BogenBefund
@@ -36,6 +38,8 @@ import de.emmpunkt.write.data.vorlagenFehler
 import de.emmpunkt.write.data.werteZeilen
 import de.emmpunkt.write.data.zuNotiz
 import de.emmpunkt.write.data.zuVorlage
+import de.emmpunkt.write.data.zuordnung
+import de.emmpunkt.write.data.zuordnungNachTextaenderung
 import de.emmpunkt.write.machine.Axis
 import de.emmpunkt.write.machine.HttpSdTransfer
 import de.emmpunkt.write.machine.MachineController
@@ -51,6 +55,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -100,6 +105,11 @@ data class SerieUiState(
     val werte: String = "",
     /** Arbeitszustand der Vorlage - getrennt vom Editor, damit sich beide nicht stoeren. */
     val settings: AppSettings = AppSettings(),
+    /** Stil je Absatz des Vorlagentextes. Platzhalter enthalten keine Zeilenumbrueche, also
+     * bleibt sie auch nach dem Einsetzen der Werte gueltig. */
+    val zuordnung: List<Int> = emptyList(),
+    /** Der Absatz, in dem der Cursor im Vorlagentext steht. */
+    val absatzIndex: Int = 0,
     val spalten: List<String> = emptyList(),
     val zeilen: List<WerteZeile> = emptyList(),
     val befunde: List<BogenBefund> = emptyList(),
@@ -158,6 +168,25 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
     private val _text = MutableStateFlow("")
     val text: StateFlow<String> = _text.asStateFlow()
 
+    /**
+     * Welcher Stil fuer welchen Absatz gilt.
+     *
+     * Bewusst neben [_text] und nicht in den [AppSettings]: Die Zuordnung gehoert zum Text -
+     * sie zaehlt dessen Absaetze - und nicht zum Schriftbild. Beim Tippen wird sie
+     * nachgefuehrt, sonst rutschte hinter jedem eingefuegten Absatz alles eine Stelle.
+     */
+    private val _zuordnung = MutableStateFlow<List<Int>>(emptyList())
+    val zuordnung: StateFlow<List<Int>> = _zuordnung.asStateFlow()
+
+    /** Der Absatz, in dem der Cursor steht. Der Editor meldet ihn, die Stilleiste zeigt ihn. */
+    private val _absatzIndex = MutableStateFlow(0)
+    val absatzIndex: StateFlow<Int> = _absatzIndex.asStateFlow()
+
+    /** Der Stil des Absatzes am Cursor - genau der, den die Regler bearbeiten. */
+    val stilIndex: StateFlow<Int> = combine(_zuordnung, _absatzIndex) { zuordnung, absatz ->
+        zuordnung.getOrElse(absatz) { 0 }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
     private val _document = MutableStateFlow(DocumentState())
     val document: StateFlow<DocumentState> = _document.asStateFlow()
 
@@ -213,6 +242,15 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
         _aktuelleNotizId.value = notiz.id
         _text.value = notiz.text
         _settings.value = _settings.value.mitNotiz(notiz).copy(offeneNotizId = notiz.id)
+        // Die gespeicherte Zuordnung kann kuerzer oder laenger sein als der Text - etwa bei
+        // einer Notiz aus der Zeit vor den Stilen. Einmal durch die Nachfuehrung geschickt,
+        // passt sie danach genau auf die Absaetze.
+        _zuordnung.value = zuordnungNachTextaenderung(
+            alt = notiz.text.split('\n'),
+            neu = notiz.text.split('\n'),
+            zuordnung = notiz.zuordnung(),
+        )
+        _absatzIndex.value = 0
         recompute()
         // Sofort merken und nicht erst beim naechsten Speichern: wird die App direkt nach dem
         // Wechsel beendet, oeffnete sie sonst wieder die vorige Notiz.
@@ -220,7 +258,33 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onTextChanged(value: String) {
+        _zuordnung.value = zuordnungNachTextaenderung(
+            alt = _text.value.split('\n'),
+            neu = value.split('\n'),
+            zuordnung = _zuordnung.value,
+        )
         _text.value = value
+        recompute()
+        persist()
+    }
+
+    /** Der Editor meldet, in welchem Absatz der Cursor jetzt steht. */
+    fun onCursorAbsatz(index: Int) {
+        _absatzIndex.value = index
+    }
+
+    /**
+     * Weist dem Absatz am Cursor einen Stil zu.
+     *
+     * Die Zuordnung wird bis zu diesem Absatz mit dem ersten Stil aufgefuellt, falls sie kuerzer
+     * ist - das kommt bei einer Notiz aus der Zeit vor den Stilen vor.
+     */
+    fun stilZuweisen(stilIndex: Int) {
+        val absatz = _absatzIndex.value
+        val anzahl = _text.value.split('\n').size
+        _zuordnung.value = List(maxOf(anzahl, absatz + 1)) { i ->
+            if (i == absatz) stilIndex else _zuordnung.value.getOrElse(i) { 0 }
+        }
         recompute()
         persist()
     }
@@ -281,11 +345,12 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
 
         val s = _settings.value
         val ergebnis = runCatching {
-            fitSize(
+            fitSkalierung(
                 text,
-                s.toTextStyle(),
+                s.toTextStyles(),
+                _zuordnung.value,
+                { Fonts.load(it) },
                 s.toFrame(),
-                Fonts.load(s.fontId),
                 minMm = AppSettings.SCHRIFTGROESSE_MIN_MM,
                 maxMm = AppSettings.SCHRIFTGROESSE_MAX_MM,
             )
@@ -305,7 +370,15 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
 
-        updateSettings { it.copy(sizeMm = ergebnis.sizeMm) }
+        // Alle Stile wandern gemeinsam: Was doppelt so gross war, bleibt doppelt so gross.
+        val neueGroessen = skaliert(s.toTextStyles(), ergebnis.sizeMm).map { it.sizeMm }
+        updateSettings { alt ->
+            alt.copy(
+                stile = alt.stile.mapIndexed { i, stil ->
+                    stil.copy(sizeMm = neueGroessen.getOrElse(i) { stil.sizeMm })
+                },
+            )
+        }
     }
 
     /**
@@ -318,8 +391,10 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
     private fun recompute() {
         val s = _settings.value
         val result = runCatching {
-            val font = Fonts.load(s.fontId)
-            val laid = layoutText(_text.value, s.toTextStyle(), s.toFrame(), font)
+            val laid = layoutAbsaetze(
+                absaetzeAus(_text.value, s.toTextStyles(), _zuordnung.value) { Fonts.load(it) },
+                s.toFrame(),
+            )
             val job = laid.toPlotJob(s.toMachineProfile().applying(maschinenwerte))
             DocumentState(
                 laidOut = laid,
@@ -362,7 +437,9 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
         // id 0 heisst: die Startnotiz steht noch nicht. Bis dahin gaebe es nichts zu
         // beschreiben, und ein Speichern legte versehentlich eine zweite Notiz an.
         if (id != 0L) {
-            notes.speichern(s.zuNotiz(id, _text.value, System.currentTimeMillis()))
+            notes.speichern(
+                s.zuNotiz(id, _text.value, System.currentTimeMillis(), _zuordnung.value),
+            )
         }
     }
 
@@ -415,6 +492,12 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
                 // Basis sind die aktuellen Einstellungen: Verbindung, Vorschuebe und
                 // Papier-Offset kommen von dort, Schriftbild und Blatt aus der Vorlage.
                 settings = _settings.value.mitVorlage(v),
+                zuordnung = zuordnungNachTextaenderung(
+                    alt = v.text.split('\n'),
+                    neu = v.text.split('\n'),
+                    zuordnung = v.zuordnung(),
+                ),
+                absatzIndex = 0,
                 lauf = null,
             )
         }
@@ -442,9 +525,10 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
                 pruefeBogen(
                     zeilen = brauchbare,
                     vorlage = s.text,
-                    style = s.settings.toTextStyle(),
+                    stile = s.settings.toTextStyles(),
+                    zuordnung = s.zuordnung,
                     frame = s.settings.toFrame(),
-                    font = Fonts.load(s.settings.fontId),
+                    schrift = { Fonts.load(it) },
                 )
             }.getOrDefault(emptyList())
         }
@@ -454,11 +538,13 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             brauchbare.firstOrNull()?.let { erste ->
                 runCatching {
-                    layoutText(
-                        einsetzen(s.text, erste.felder),
-                        s.settings.toTextStyle(),
+                    layoutAbsaetze(
+                        absaetzeAus(
+                            einsetzen(s.text, erste.felder),
+                            s.settings.toTextStyles(),
+                            s.zuordnung,
+                        ) { Fonts.load(it) },
                         s.settings.toFrame(),
-                        Fonts.load(s.settings.fontId),
                     )
                 }.getOrNull()
             }
@@ -510,7 +596,29 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
 
     fun vorlageNameGeaendert(v: String) = serieFeldGeaendert { it.copy(name = v) }
 
-    fun vorlageTextGeaendert(v: String) = serieFeldGeaendert { it.copy(text = v) }
+    fun vorlageTextGeaendert(v: String) = serieFeldGeaendert { alt ->
+        alt.copy(
+            text = v,
+            zuordnung = zuordnungNachTextaenderung(
+                alt = alt.text.split('\n'),
+                neu = v.split('\n'),
+                zuordnung = alt.zuordnung,
+            ),
+        )
+    }
+
+    /** Der Serie-Reiter meldet, in welchem Absatz des Vorlagentextes der Cursor steht. */
+    fun serieCursorAbsatz(index: Int) = _serie.update { it.copy(absatzIndex = index) }
+
+    /** Weist dem Absatz am Cursor im Vorlagentext einen Stil zu. */
+    fun serieStilZuweisen(stilIndex: Int) = serieFeldGeaendert { alt ->
+        val anzahl = alt.text.split('\n').size
+        alt.copy(
+            zuordnung = List(maxOf(anzahl, alt.absatzIndex + 1)) { i ->
+                if (i == alt.absatzIndex) stilIndex else alt.zuordnung.getOrElse(i) { 0 }
+            },
+        )
+    }
 
     fun werteGeaendert(v: String) = serieFeldGeaendert { it.copy(werte = v) }
 
@@ -555,6 +663,7 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
                 text = s.text,
                 werte = s.werte,
                 jetzt = System.currentTimeMillis(),
+                zuordnung = s.zuordnung,
             ),
         )
     }
@@ -787,12 +896,16 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun serienBogenPlotten(
         text: String,
         s: AppSettings,
+        zuordnung: List<Int>,
         ueberSdKarte: Boolean,
     ): Result<Unit> {
         val c = controller ?: return Result.failure(IllegalStateException("Nicht verbunden."))
 
         val laid = runCatching {
-            layoutText(text, s.toTextStyle(), s.toFrame(), Fonts.load(s.fontId))
+            layoutAbsaetze(
+                absaetzeAus(text, s.toTextStyles(), zuordnung) { Fonts.load(it) },
+                s.toFrame(),
+            )
         }.getOrElse { return Result.failure(it) }
 
         val job = laid.toPlotJob(s.toMachineProfile().applying(maschinenwerte))
@@ -839,7 +952,9 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
         val texte = s.zeilen.filter { it.fehler == null }.map { einsetzen(s.text, it.felder) }
         val lauf = Serienlauf(
             bogen = texte,
-            plotteBogen = { _, text -> serienBogenPlotten(text, s.settings, ueberSdKarte) },
+            plotteBogen = { _, text ->
+                serienBogenPlotten(text, s.settings, s.zuordnung, ueberSdKarte)
+            },
         )
         serienlauf = lauf
 

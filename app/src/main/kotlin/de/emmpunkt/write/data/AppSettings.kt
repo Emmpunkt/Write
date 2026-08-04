@@ -60,10 +60,10 @@ data class AppSettings(
     val rahmenBreiteMm: Float = 132f,
     val rahmenHoeheMm: Float = 89f,
 
-    // Schrift
-    val fontId: String = Fonts.defaultId,
-    val sizeMm: Float = 7f,
-    val align: Align = Align.LEFT,
+    // Schrift. Schriftart, Groesse und Ausrichtung stehen NICHT mehr einzeln hier, sondern in
+    // den Stilen - sonst gaebe es sie zweimal, einmal global und einmal je Stil. Was hier
+    // bleibt, gilt fuer das ganze Dokument.
+    val stile: List<Absatzstil> = listOf(GRUNDSTIL),
     val lineSpacing: Float = 1.15f,
     val letterSpacing: Float = 0f,
     val wordSpacing: Float = -0.3f,
@@ -86,7 +86,25 @@ data class AppSettings(
      */
     val offeneNotizId: Long = 0L,
 ) {
+    init {
+        require(stile.isNotEmpty()) { "Es muss immer mindestens einen Stil geben" }
+    }
+
     companion object {
+        /**
+         * Der Stil, den es immer gibt.
+         *
+         * Er tritt an die Stelle der frueheren Einzelfelder fontId/sizeMm/align und ist damit
+         * genau das, was die App vor den Absatzstilen konnte. Loeschen laesst er sich nicht -
+         * ein Dokument ohne Stil haette kein Schriftbild.
+         */
+        val GRUNDSTIL = Absatzstil(
+            name = "Text",
+            fontId = Fonts.defaultId,
+            sizeMm = 7f,
+            align = Align.LEFT,
+        )
+
         /**
          * Grenzen des Groessenreglers im Editor.
          *
@@ -127,19 +145,56 @@ data class AppSettings(
         naturalWriteOrder = naturalWriteOrder,
     )
 
+    /**
+     * Aendert genau einen Stil und laesst die uebrigen stehen.
+     *
+     * Der Griff, mit dem die Regler arbeiten: Sie wirken immer auf den Stil des Absatzes, in
+     * dem der Cursor steht - nicht auf den Absatz selbst. Wer denselben Stil zweimal zugewiesen
+     * hat, aendert damit bewusst beide Absaetze.
+     */
+    fun mitStil(index: Int, aendern: (Absatzstil) -> Absatzstil): AppSettings =
+        copy(stile = stile.mapIndexed { i, stil -> if (i == index) aendern(stil) else stil })
+
+    /**
+     * Legt einen weiteren Stil an - als Kopie von [vorlage], damit man nur das aendern muss,
+     * was anders sein soll.
+     */
+    fun mitNeuemStil(vorlage: Int): AppSettings {
+        val quelle = stile.getOrElse(vorlage) { stile.first() }
+        return copy(stile = stile + quelle.copy(name = freierStilname()))
+    }
+
+    /**
+     * Entfernt einen Stil. Der erste bleibt immer stehen - ohne ihn haette das Dokument kein
+     * Schriftbild mehr.
+     */
+    fun ohneStil(index: Int): AppSettings =
+        if (index <= 0 || index >= stile.size) this
+        else copy(stile = stile.filterIndexed { i, _ -> i != index })
+
+    /** "Stil 2", "Stil 3", ... - der erste Name, den es noch nicht gibt. */
+    private fun freierStilname(): String {
+        val vergeben = stile.map { it.name }.toSet()
+        var n = stile.size + 1
+        while ("Stil $n" in vergeben) n++
+        return "Stil $n"
+    }
+
     /** Wo die linke untere Ecke des Textrahmens auf dem Tisch liegt. */
     val ursprungXMm: Float get() = paperOffsetXMm + rahmenXMm
     val ursprungYMm: Float get() = paperOffsetYMm + rahmenYMm
 
-    fun toTextStyle() = TextStyle(
-        fontId = fontId,
-        sizeMm = sizeMm,
-        align = align,
-        lineSpacing = lineSpacing,
-        letterSpacing = letterSpacing,
-        wordSpacing = wordSpacing,
-        slantDeg = slantDeg,
-    )
+    /**
+     * Die Stile als fertige Schriftbilder fuer den Satz.
+     *
+     * Schrift, Groesse und Ausrichtung kommen aus dem jeweiligen Stil, alles Uebrige aus diesen
+     * Einstellungen - das Feintuning gilt fuer das ganze Dokument.
+     */
+    fun toTextStyles(): List<TextStyle> = stile.alsTextStyles(this)
+
+    /** Das Schriftbild eines einzelnen Stils; auf den ersten zurueckfallend. */
+    fun toTextStyle(stilIndex: Int = 0): TextStyle =
+        toTextStyles().getOrElse(stilIndex) { toTextStyles().first() }
 
     /**
      * Der Textrahmen als Satzflaeche.
@@ -253,10 +308,20 @@ class SettingsRepository(private val context: Context) {
             rahmenYMm = p[Keys.rahmenY] ?: defaults.rahmenYMm,
             rahmenBreiteMm = p[Keys.rahmenBreite] ?: defaults.rahmenBreiteMm,
             rahmenHoeheMm = p[Keys.rahmenHoehe] ?: defaults.rahmenHoeheMm,
-            fontId = p[Keys.fontId] ?: defaults.fontId,
-            sizeMm = p[Keys.size] ?: defaults.sizeMm,
-            align = p[Keys.align]?.let { runCatching { Align.valueOf(it) }.getOrNull() }
-                ?: defaults.align,
+            // Fehlen die Stile, stammen die Einstellungen aus der Zeit davor: dann bildet das
+            // damalige Schriftbild den Grundstil. Die Vorgabe waere hier falsch - wer in 12 mm
+            // Zierschrift geschrieben hat, faende nach dem Update 7 mm Allure vor.
+            stile = stileAusText(p[Keys.stile].orEmpty()).ifEmpty {
+                val grund = AppSettings.GRUNDSTIL
+                listOf(
+                    grund.copy(
+                        fontId = p[Keys.fontId] ?: grund.fontId,
+                        sizeMm = p[Keys.size] ?: grund.sizeMm,
+                        align = p[Keys.align]?.let { runCatching { Align.valueOf(it) }.getOrNull() }
+                            ?: grund.align,
+                    ),
+                )
+            },
             lineSpacing = p[Keys.lineSpacing] ?: defaults.lineSpacing,
             letterSpacing = p[Keys.letterSpacing] ?: defaults.letterSpacing,
             wordSpacing = p[Keys.wordSpacing] ?: defaults.wordSpacing,
@@ -293,9 +358,7 @@ class SettingsRepository(private val context: Context) {
             p[Keys.rahmenY] = s.rahmenYMm
             p[Keys.rahmenBreite] = s.rahmenBreiteMm
             p[Keys.rahmenHoehe] = s.rahmenHoeheMm
-            p[Keys.fontId] = s.fontId
-            p[Keys.size] = s.sizeMm
-            p[Keys.align] = s.align.name
+            p[Keys.stile] = stileAlsText(s.stile)
             p[Keys.lineSpacing] = s.lineSpacing
             p[Keys.letterSpacing] = s.letterSpacing
             p[Keys.wordSpacing] = s.wordSpacing
@@ -325,6 +388,10 @@ class SettingsRepository(private val context: Context) {
         val rahmenY = floatPreferencesKey("rahmen_y")
         val rahmenBreite = floatPreferencesKey("rahmen_breite")
         val rahmenHoehe = floatPreferencesKey("rahmen_hoehe")
+        val stile = stringPreferencesKey("stile")
+
+        // Nur noch zum LESEN: aus ihnen entsteht der Grundstil, wenn "stile" fehlt.
+        // Geschrieben werden sie nicht mehr - sonst gaebe es das Schriftbild zweimal.
         val fontId = stringPreferencesKey("font_id")
         val size = floatPreferencesKey("size_mm")
         val align = stringPreferencesKey("align")

@@ -1,16 +1,23 @@
 package de.emmpunkt.write.ui
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FormatAlignCenter
 import androidx.compose.material.icons.filled.FormatAlignLeft
 import androidx.compose.material.icons.filled.FormatAlignRight
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
@@ -36,6 +43,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import de.emmpunkt.write.core.font.Fonts
 import de.emmpunkt.write.core.layout.Align
+import de.emmpunkt.write.data.Absatzstil
 import de.emmpunkt.write.data.AppSettings
 import de.emmpunkt.write.data.PaperPresets
 import java.util.Locale
@@ -57,6 +65,12 @@ import kotlin.math.roundToInt
 fun StilLeiste(
     settings: AppSettings,
     textLeer: Boolean,
+    /** Der Absatz, in dem der Cursor steht - 0-basiert, angezeigt wird `+ 1`. */
+    absatzIndex: Int,
+    /** Der Stil dieses Absatzes. Er ist es, den die Regler darunter bearbeiten. */
+    stilIndex: Int,
+    /** Chip angetippt: Dieser Stil gilt ab jetzt fuer den Absatz am Cursor. */
+    onStilZuweisen: (Int) -> Unit,
     onChange: ((AppSettings) -> AppSettings) -> Unit,
     onChangeLive: ((AppSettings) -> AppSettings) -> Unit,
     onCommit: () -> Unit,
@@ -71,8 +85,41 @@ fun StilLeiste(
     // Reiner Bildschirmzustand: welche Regler zuletzt offen standen, muss nichts ueberdauern.
     var feintuningOffen by remember { mutableStateOf(false) }
     var rahmenOffen by remember { mutableStateOf(false) }
+    var stilDialogOffen by remember { mutableStateOf(false) }
+
+    val stil = settings.stile.getOrElse(stilIndex) { settings.stile.first() }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        StilChips(
+            stile = settings.stile,
+            absatzIndex = absatzIndex,
+            stilIndex = stilIndex,
+            onZuweisen = onStilZuweisen,
+            onAnlegen = {
+                onChange { it.mitNeuemStil(stilIndex) }
+                // Der neue Stil steht am Ende - und gilt sofort fuer den Absatz am Cursor,
+                // sonst legte man einen Stil an, den niemand benutzt.
+                onStilZuweisen(settings.stile.size)
+            },
+            onBearbeiten = { stilDialogOffen = true },
+        )
+
+        if (stilDialogOffen) {
+            StilDialog(
+                stil = stil,
+                loeschbar = stilIndex > 0 && settings.stile.size > 1,
+                onUmbenennen = { neu ->
+                    onChange { s -> s.mitStil(stilIndex) { it.copy(name = neu) } }
+                    stilDialogOffen = false
+                },
+                onLoeschen = {
+                    onChange { it.ohneStil(stilIndex) }
+                    stilDialogOffen = false
+                },
+                onSchliessen = { stilDialogOffen = false },
+            )
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -80,10 +127,12 @@ fun StilLeiste(
         ) {
             AuswahlFeld(
                 label = "Schrift",
-                selected = Fonts.entry(settings.fontId).displayName,
+                selected = Fonts.entry(stil.fontId).displayName,
                 options = Fonts.available.map { it.displayName },
                 onSelect = { index ->
-                    onChange { it.copy(fontId = Fonts.available[index].id) }
+                    onChange { s ->
+                        s.mitStil(stilIndex) { it.copy(fontId = Fonts.available[index].id) }
+                    }
                 },
                 modifier = Modifier.weight(1.15f),
             )
@@ -104,13 +153,15 @@ fun StilLeiste(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Größe", style = MaterialTheme.typography.bodyMedium)
             Slider(
-                value = settings.sizeMm,
-                onValueChange = { v -> onChangeLive { it.copy(sizeMm = auf(v, 0.1f)) } },
+                value = stil.sizeMm,
+                onValueChange = { v ->
+                    onChangeLive { s -> s.mitStil(stilIndex) { it.copy(sizeMm = auf(v, 0.1f)) } }
+                },
                 onValueChangeFinished = onCommit,
                 valueRange = AppSettings.SCHRIFTGROESSE_MIN_MM..AppSettings.SCHRIFTGROESSE_MAX_MM,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
             )
-            Text("${settings.sizeMm.fmt()} mm", style = MaterialTheme.typography.bodyMedium)
+            Text("${stil.sizeMm.fmt()} mm", style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = onAutoFit, enabled = !textLeer) { Text("Einpassen") }
         }
 
@@ -122,8 +173,8 @@ fun StilLeiste(
             )
             ausrichtungen.forEachIndexed { index, (align, icon) ->
                 SegmentedButton(
-                    selected = settings.align == align,
-                    onClick = { onChange { it.copy(align = align) } },
+                    selected = stil.align == align,
+                    onClick = { onChange { s -> s.mitStil(stilIndex) { it.copy(align = align) } } },
                     shape = SegmentedButtonDefaults.itemShape(index, ausrichtungen.size),
                 ) {
                     Icon(icon, contentDescription = align.name)
@@ -214,6 +265,111 @@ fun StilLeiste(
             )
         }
     }
+}
+
+/**
+ * Die Stile als Chip-Reihe, darueber die Nummer des Absatzes am Cursor.
+ *
+ * Antippen weist zu UND waehlt aus - beides ist derselbe Griff, weil die Regler darunter immer
+ * den Stil des Absatzes zeigen, in dem man gerade steht. Ein getrennter "gewaehlter Stil"
+ * waere ein zweiter Zustand, der zur Cursorposition nicht passen kann.
+ */
+@Composable
+private fun StilChips(
+    stile: List<Absatzstil>,
+    absatzIndex: Int,
+    stilIndex: Int,
+    onZuweisen: (Int) -> Unit,
+    onAnlegen: () -> Unit,
+    onBearbeiten: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "Absatz ${absatzIndex + 1}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        IconButton(onClick = onBearbeiten) {
+            Icon(Icons.Default.Edit, contentDescription = "Stil bearbeiten")
+        }
+    }
+
+    // Waagerecht scrollbar: Bei fuenf Stilen mit langen Namen ist in einer Telefonzeile sonst
+    // Schluss, und der letzte Chip waere nicht mehr erreichbar.
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        stile.forEachIndexed { index, stil ->
+            FilterChip(
+                selected = index == stilIndex,
+                onClick = { onZuweisen(index) },
+                label = { Text(stil.name, maxLines = 1, softWrap = false) },
+            )
+        }
+        AssistChip(onClick = onAnlegen, label = { Text("+") })
+    }
+}
+
+/**
+ * Umbenennen und Loeschen eines Stils.
+ *
+ * Als Dialog hinter einem sichtbaren Stift-Knopf statt hinter langem Tippen auf den Chip: Eine
+ * Geste, die man nicht sieht, findet niemand.
+ */
+@Composable
+private fun StilDialog(
+    stil: Absatzstil,
+    loeschbar: Boolean,
+    onUmbenennen: (String) -> Unit,
+    onLoeschen: () -> Unit,
+    onSchliessen: () -> Unit,
+) {
+    var name by remember { mutableStateOf(stil.name) }
+
+    AlertDialog(
+        onDismissRequest = onSchliessen,
+        title = { Text("Stil „${stil.name}\"") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (!loeschbar) {
+                    Text(
+                        "Der erste Stil bleibt bestehen – ohne ihn hätte das Dokument kein " +
+                            "Schriftbild.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onUmbenennen(name) },
+                enabled = name.isNotBlank(),
+            ) {
+                Text("Übernehmen")
+            }
+        },
+        dismissButton = {
+            if (loeschbar) {
+                TextButton(onClick = onLoeschen) { Text("Löschen") }
+            } else {
+                TextButton(onClick = onSchliessen) { Text("Abbrechen") }
+            }
+        },
+    )
 }
 
 /**

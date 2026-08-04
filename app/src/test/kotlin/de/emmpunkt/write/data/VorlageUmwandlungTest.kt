@@ -14,9 +14,8 @@ class VorlageUmwandlungTest {
         text = "{anrede} {name},",
         werte = "Liebe;Anna",
         updatedAt = 1000L,
-        fontId = "serif",
-        sizeMm = 11f,
-        align = Align.CENTER.name,
+        stile = stileAlsText(listOf(Absatzstil("Text", "serif", 11f, Align.CENTER))),
+        absatzZuordnung = "",
         lineSpacing = 1.4f,
         letterSpacing = 0.2f,
         wordSpacing = -0.1f,
@@ -32,9 +31,9 @@ class VorlageUmwandlungTest {
         // Der Unterschied zur Notiz: eine Grusskarte bringt ihren Textkasten mit.
         val s = vorgabe.mitVorlage(vorlage())
 
-        assertEquals("serif", s.fontId)
-        assertEquals(11f, s.sizeMm)
-        assertEquals(Align.CENTER, s.align)
+        assertEquals("serif", s.stile.single().fontId)
+        assertEquals(11f, s.stile.single().sizeMm)
+        assertEquals(Align.CENTER, s.stile.single().align)
         assertEquals(1.4f, s.lineSpacing)
         assertEquals(0.2f, s.letterSpacing)
         assertEquals(-0.1f, s.wordSpacing)
@@ -110,9 +109,9 @@ class VorlageUmwandlungTest {
 
     @Test
     fun `unbekannte Ausrichtung faellt auf die Vorgabe zurueck`() {
-        val kaputt = vorlage().copy(align = "SCHRAEG_VON_UNTEN")
+        val kaputt = vorlage().copy(stile = "Text|serif|11.0|SCHRAEG_VON_UNTEN")
 
-        assertEquals(AppSettings().align, vorgabe.mitVorlage(kaputt).align)
+        assertEquals(Align.LEFT, vorgabe.mitVorlage(kaputt).stile.single().align)
     }
 
     @Test
@@ -132,12 +131,15 @@ class VorlageUmwandlungTest {
 
     @Test
     fun `eine neue Vorlage uebernimmt die aktuellen Einstellungen und ist sonst leer`() {
-        val eigene = vorgabe.copy(fontId = "serif", sizeMm = 9f, rahmenBreiteMm = 120f)
+        val eigene = vorgabe.copy(
+            stile = listOf(Absatzstil("Text", "serif", 9f, Align.LEFT)),
+            rahmenBreiteMm = 120f,
+        )
         val neu = neueVorlage(eigene, jetzt = 2000L)
 
         assertEquals(0L, neu.id, "Eine neue Vorlage darf noch keine Kennung haben")
-        assertEquals("serif", neu.fontId)
-        assertEquals(9f, neu.sizeMm)
+        assertEquals("serif", neu.stilListe().single().fontId)
+        assertEquals(9f, neu.stilListe().single().sizeMm)
         assertEquals(120f, neu.rahmenBreiteMm)
         assertEquals("", neu.werte)
         assertEquals(2000L, neu.updatedAt)

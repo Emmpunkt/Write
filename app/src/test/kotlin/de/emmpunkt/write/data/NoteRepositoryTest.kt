@@ -39,7 +39,9 @@ class NoteRepositoryTest {
     @Test
     fun `beim ersten Start wird aus lastText die erste Notiz`() = runTest {
         val (r, _) = repo()
-        val gespeicherteStilwerte = vorgabe.copy(fontId = "serif", sizeMm = 12f)
+        val gespeicherteStilwerte = vorgabe.copy(
+            stile = listOf(AppSettings.GRUNDSTIL.copy(fontId = "serif", sizeMm = 12f)),
+        )
 
         val notiz = r.sicherstellenDassEineDaIst(
             lastText = "Alte Notiz",
@@ -48,8 +50,8 @@ class NoteRepositoryTest {
         )
 
         assertEquals("Alte Notiz", notiz.text)
-        assertEquals("serif", notiz.fontId, "Die damaligen Stilwerte sind verloren")
-        assertEquals(12f, notiz.sizeMm)
+        assertEquals("serif", notiz.stilListe().single().fontId, "Die damaligen Stilwerte sind verloren")
+        assertEquals(12f, notiz.stilListe().single().sizeMm)
         assertEquals(1, r.notizen.first().size)
     }
 

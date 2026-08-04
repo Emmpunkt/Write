@@ -30,11 +30,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import de.emmpunkt.write.data.absatzAmCursor
 import de.emmpunkt.write.data.AppSettings
 import de.emmpunkt.write.data.NoteEntity
 import de.emmpunkt.write.machine.SendProgress
@@ -48,6 +51,11 @@ fun EditorScreen(
     document: DocumentState,
     machine: MachineUiState,
     onTextChange: (String) -> Unit,
+    /** Der Absatz, in dem der Cursor steht - der Editor ist die einzige Stelle, die ihn kennt. */
+    absatzIndex: Int,
+    stilIndex: Int,
+    onCursor: (Int) -> Unit,
+    onStilZuweisen: (Int) -> Unit,
     onSettingsChange: ((AppSettings) -> AppSettings) -> Unit,
     onSettingsChangeLive: ((AppSettings) -> AppSettings) -> Unit,
     onSettingsCommit: () -> Unit,
@@ -64,6 +72,16 @@ fun EditorScreen(
 ) {
     var showTravel by remember { mutableStateOf(false) }
     var listeOffen by remember { mutableStateOf(false) }
+
+    // Das Eingabefeld fuehrt seine Auswahl selbst - nur so ist bekannt, in welchem Absatz der
+    // Cursor steht. Der Schluessel sorgt dafuer, dass beim Notizwechsel ein frischer Zustand
+    // mit dem neuen Text entsteht; ohne ihn zeigte das Feld weiter den alten.
+    var feld by remember(aktuelleNotizId) { mutableStateOf(TextFieldValue(text)) }
+    if (feld.text != text) {
+        // Von aussen geaendert (erste Ladung aus der Datenbank). Beim Tippen tritt das nicht
+        // ein, weil der Text unveraendert zurueckkommt.
+        feld = TextFieldValue(text, TextRange(text.length))
+    }
 
     Column(
         modifier = modifier
@@ -96,8 +114,12 @@ fun EditorScreen(
         }
 
         OutlinedTextField(
-            value = text,
-            onValueChange = onTextChange,
+            value = feld,
+            onValueChange = { neu ->
+                feld = neu
+                if (neu.text != text) onTextChange(neu.text)
+                onCursor(absatzAmCursor(neu.text, neu.selection.start))
+            },
             modifier = Modifier.fillMaxWidth().height(140.dp),
             label = { Text("Notiz") },
             placeholder = { Text("Text eingeben…") },
@@ -112,6 +134,9 @@ fun EditorScreen(
         StilLeiste(
             settings = settings,
             textLeer = text.isBlank(),
+            absatzIndex = absatzIndex,
+            stilIndex = stilIndex,
+            onStilZuweisen = onStilZuweisen,
             onChange = onSettingsChange,
             onChangeLive = onSettingsChangeLive,
             onCommit = onSettingsCommit,

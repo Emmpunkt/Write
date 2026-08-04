@@ -41,7 +41,20 @@ data class LaidOutText(
 )
 
 /**
- * Setzt [text] in den [frame].
+ * Ein Absatz mit dem Schriftbild, in dem er gesetzt werden soll.
+ *
+ * Die Schrift steht neben dem Stil, weil sie mit ihm wechselt: zwei Absaetze duerfen in
+ * verschiedenen Schriften stehen, und [TextStyle.fontId] ist nur ein Bezeichner, keine
+ * geladene Schrift.
+ */
+data class AbsatzSatz(
+    val text: String,
+    val style: TextStyle,
+    val font: StrokeFont,
+)
+
+/**
+ * Setzt [text] in den [frame] - durchgehend in einem Schriftbild.
  *
  * Umbrochen wird an Wortgrenzen; ein Wort, das allein nicht in die Zeile passt, wird hart
  * getrennt, damit nichts ueber den Rand laeuft. Harte Zeilenumbrueche im Text bleiben erhalten.
@@ -54,49 +67,121 @@ fun layoutText(
     style: TextStyle,
     frame: Frame,
     font: StrokeFont,
-): LaidOutText {
-    val metrics = Metrics(font, style)
-    val usableWidth = frame.usableWidthMm
+): LaidOutText = layoutAbsaetze(
+    text.split('\n').map { AbsatzSatz(it, style, font) },
+    frame,
+)
 
+/**
+ * Setzt Abstaetze in den [frame], jeden in seinem eigenen Schriftbild.
+ *
+ * Ein Absatz ist die kleinste Einheit, die ein eigenes Schriftbild tragen kann. Das ist eine
+ * bewusste Grenze: alles Feinere braeuchte Textauswahl, Formatspuren im Editor und ein
+ * zeichengenaues Speicherformat.
+ */
+fun layoutAbsaetze(absaetze: List<AbsatzSatz>, frame: Frame): LaidOutText {
+    val usableWidth = frame.usableWidthMm
     val overlong = LinkedHashSet<String>()
-    val brokenLines = text
-        .split('\n')
-        .flatMap { paragraph -> wrapParagraph(paragraph, metrics, usableWidth, overlong) }
+    val unsupported = LinkedHashSet<Int>()
+
+    // Erst alles umbrechen, dann setzen: fuer die Grundlinien muss die vollstaendige Folge der
+    // Zeilen samt ihrer Metriken feststehen, weil jeder Uebergang beide Nachbarn braucht.
+    val zeilen = ArrayList<Zeile>()
+    absaetze.forEach { absatz ->
+        val metrics = Metrics(absatz.font, absatz.style)
+        unsupported += absatz.font.unsupportedCharacters(absatz.text)
+        wrapParagraph(absatz.text, metrics, usableWidth, overlong).forEach { text ->
+            zeilen += Zeile(text, metrics, absatz.style)
+        }
+    }
+
+    if (zeilen.isEmpty()) {
+        return LaidOutText(
+            lines = emptyList(),
+            strokes = emptyList(),
+            requiredHeightMm = 0f,
+            overflow = false,
+            unsupported = unsupported,
+            overlongWords = overlong,
+        )
+    }
 
     // Erste Grundlinie so tief, dass die hoechste Oberlaenge gerade unter den oberen Rand passt.
-    val firstBaseline = frame.heightMm - frame.margins.top - metrics.ascenderMm
-    val lines = ArrayList<LaidOutLine>(brokenLines.size)
+    var baselineY = frame.heightMm - frame.margins.top - zeilen.first().metrics.ascenderMm
+    var vorschuebe = 0f
+    val lines = ArrayList<LaidOutLine>(zeilen.size)
     val allStrokes = ArrayList<Polyline>()
 
-    brokenLines.forEachIndexed { index, lineText ->
-        val baselineY = firstBaseline - index * metrics.lineAdvanceMm
-        val width = metrics.widthOf(lineText)
-        val startX = when (style.align) {
+    zeilen.forEachIndexed { index, zeile ->
+        if (index > 0) {
+            baselineY -= zeilenAbstand(zeilen[index - 1], zeile).also { vorschuebe += it }
+        }
+
+        val width = zeile.metrics.widthOf(zeile.text)
+        val startX = when (zeile.style.align) {
             Align.LEFT -> frame.margins.left
             Align.CENTER -> frame.margins.left + (usableWidth - width) / 2f
             Align.RIGHT -> frame.margins.left + (usableWidth - width)
         }
 
-        val strokes = einlaufKorrigiert(metrics.renderLine(lineText, startX, baselineY), frame.margins.left)
-        lines += LaidOutLine(lineText, width, baselineY, strokes)
+        val strokes = einlaufKorrigiert(
+            zeile.metrics.renderLine(zeile.text, startX, baselineY),
+            frame.margins.left,
+        )
+        lines += LaidOutLine(zeile.text, width, baselineY, strokes)
         allStrokes += strokes
     }
 
-    val requiredHeight = if (brokenLines.isEmpty()) {
-        0f
-    } else {
-        metrics.ascenderMm + (brokenLines.size - 1) * metrics.lineAdvanceMm - metrics.descenderMm
-    }
+    // Von der obersten Oberlaenge bis zur untersten Unterlaenge. Ueber die Vorschuebe summiert
+    // und nicht als (n-1) * lineAdvance gerechnet: der Faktor gilt nur bei gleicher Groesse.
+    val requiredHeight = zeilen.first().metrics.ascenderMm +
+        vorschuebe -
+        zeilen.last().metrics.descenderMm
 
     return LaidOutText(
         lines = lines,
         strokes = allStrokes,
         requiredHeightMm = requiredHeight,
         overflow = requiredHeight > frame.usableHeightMm + OVERFLOW_TOLERANCE_MM,
-        unsupported = font.unsupportedCharacters(text),
+        unsupported = unsupported,
         overlongWords = overlong,
     )
 }
+
+/**
+ * Schneidet [text] in Abstaetze und legt jedem seinen Stil bei.
+ *
+ * [zuordnung] nennt je Absatz den Index in [stile]. Fehlende und unbekannte Eintraege fallen
+ * auf den ersten Stil zurueck: Eine Notiz, deren Zuordnung nicht mehr zum Text passt, soll
+ * schlicht einheitlich aussehen und nicht unlesbar werden.
+ */
+fun absaetzeAus(
+    text: String,
+    stile: List<TextStyle>,
+    zuordnung: List<Int>,
+    schrift: (String) -> StrokeFont,
+): List<AbsatzSatz> {
+    require(stile.isNotEmpty()) { "Es braucht mindestens einen Stil" }
+    return text.split('\n').mapIndexed { index, absatz ->
+        val stil = stile.getOrNull(zuordnung.getOrNull(index) ?: 0) ?: stile.first()
+        AbsatzSatz(absatz, stil, schrift(stil.fontId))
+    }
+}
+
+/** Eine umbrochene Zeile mit dem Schriftbild, in dem sie gesetzt wird. */
+private class Zeile(val text: String, val metrics: Metrics, val style: TextStyle)
+
+/**
+ * Der Abstand zwischen zwei aufeinanderfolgenden Grundlinien.
+ *
+ * Innerhalb eines Absatzes sind beide Vorschuebe gleich, und es bleibt beim gewohnten Wert. Am
+ * Absatzwechsel treffen zwei verschiedene aufeinander, und der groessere gewinnt: Der Vorschub
+ * der oberen Zeile allein liesse kleinen Text in den Unterlaengen einer grossen Ueberschrift
+ * sitzen, der der unteren allein gaebe einer Ueberschrift zu wenig Luft nach oben. Nur das
+ * Maximum ist in beide Richtungen sicher.
+ */
+private fun zeilenAbstand(oben: Zeile, unten: Zeile): Float =
+    maxOf(oben.metrics.lineAdvanceMm, unten.metrics.lineAdvanceMm)
 
 /**
  * Ein Zehntelmillimeter Nachsicht bei der Ueberlaufpruefung: sonst meldet ein Text, der

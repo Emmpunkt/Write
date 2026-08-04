@@ -19,13 +19,14 @@ class NoteLogikTest {
         text: String = "Test",
         fontId: String = "sans",
         sizeMm: Float = 9f,
+        stile: String = stileAlsText(listOf(Absatzstil("Text", fontId, sizeMm, Align.CENTER))),
+        zuordnung: String = "",
     ) = NoteEntity(
         id = 1L,
         text = text,
         updatedAt = 1000L,
-        fontId = fontId,
-        sizeMm = sizeMm,
-        align = Align.CENTER.name,
+        stile = stile,
+        absatzZuordnung = zuordnung,
         lineSpacing = 1.4f,
         letterSpacing = 0.2f,
         wordSpacing = -0.1f,
@@ -76,9 +77,9 @@ class NoteLogikTest {
     fun `Notiz legt ihr Schriftbild ueber die Einstellungen`() {
         val s = vorgabe.mitNotiz(notiz(fontId = "serif", sizeMm = 11f))
 
-        assertEquals("serif", s.fontId)
-        assertEquals(11f, s.sizeMm)
-        assertEquals(Align.CENTER, s.align)
+        assertEquals("serif", s.stile.single().fontId)
+        assertEquals(11f, s.stile.single().sizeMm)
+        assertEquals(Align.CENTER, s.stile.single().align)
         assertEquals(1.4f, s.lineSpacing)
         assertEquals(0.2f, s.letterSpacing)
         assertEquals(-0.1f, s.wordSpacing)
@@ -113,14 +114,34 @@ class NoteLogikTest {
     fun `unbekannte Ausrichtung faellt auf die Vorgabe zurueck`() {
         // In der Datenbank steht der Enum-Name als Text. Wird der Enum spaeter umbenannt,
         // darf die App nicht abstuerzen, sondern muss weiterlaufen.
-        val kaputt = notiz().copy(align = "SCHRAEG_VON_UNTEN")
-        assertEquals(AppSettings().align, vorgabe.mitNotiz(kaputt).align)
+        val kaputt = notiz(stile = "Text|sans|9.0|SCHRAEG_VON_UNTEN")
+        assertEquals(Align.LEFT, vorgabe.mitNotiz(kaputt).stile.single().align)
+    }
+
+    @Test
+    fun `eine unlesbare Stilspalte fuehrt zum Grundstil statt zum Absturz`() {
+        val kaputt = notiz(stile = "voelliger Unsinn")
+        assertEquals(listOf(AppSettings.GRUNDSTIL), vorgabe.mitNotiz(kaputt).stile)
+    }
+
+    @Test
+    fun `mehrere Stile ueberstehen den Weg durch die Notiz`() {
+        val zwei = listOf(
+            Absatzstil("Überschrift", "allure", 12f, Align.CENTER),
+            Absatzstil("Text", "sans", 6f, Align.LEFT),
+        )
+        val gespeichert = vorgabe.copy(stile = zwei)
+            .zuNotiz(id = 1L, text = "A\nB", jetzt = 1L, zuordnung = listOf(0, 1))
+
+        assertEquals(zwei, vorgabe.mitNotiz(gespeichert).stile)
+        assertEquals(listOf(0, 1), gespeichert.zuordnung())
     }
 
     @Test
     fun `hin und zurueck erhaelt das Schriftbild`() {
         val original = notiz(text = "Hallo")
-        val zurueck = vorgabe.mitNotiz(original).zuNotiz(id = 1L, text = "Hallo", jetzt = 1000L)
+        val zurueck = vorgabe.mitNotiz(original)
+            .zuNotiz(id = 1L, text = "Hallo", jetzt = 1000L, zuordnung = original.zuordnung())
 
         assertEquals(original, zurueck)
     }
@@ -133,8 +154,8 @@ class NoteLogikTest {
         val neu = neueNotiz(vorlage, vorgabe, jetzt = 2000L)
 
         assertEquals("", neu.text, "Der Text der Vorlage wurde mitgeschleppt")
-        assertEquals("serif", neu.fontId)
-        assertEquals(11f, neu.sizeMm)
+        assertEquals("serif", neu.stilListe().single().fontId)
+        assertEquals(11f, neu.stilListe().single().sizeMm)
         assertEquals(0L, neu.id, "Eine neue Notiz darf noch keine Kennung haben")
         assertEquals(2000L, neu.updatedAt)
     }
@@ -143,8 +164,6 @@ class NoteLogikTest {
     fun `ohne Vorlage gelten die Vorgabewerte`() {
         val neu = neueNotiz(null, vorgabe, jetzt = 2000L)
 
-        assertEquals(vorgabe.fontId, neu.fontId)
-        assertEquals(vorgabe.sizeMm, neu.sizeMm)
-        assertEquals(vorgabe.align.name, neu.align)
+        assertEquals(vorgabe.stile, neu.stilListe())
     }
 }

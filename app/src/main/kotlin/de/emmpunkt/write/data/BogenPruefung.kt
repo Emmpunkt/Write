@@ -3,7 +3,8 @@ package de.emmpunkt.write.data
 import de.emmpunkt.write.core.font.StrokeFont
 import de.emmpunkt.write.core.layout.Frame
 import de.emmpunkt.write.core.layout.TextStyle
-import de.emmpunkt.write.core.layout.layoutText
+import de.emmpunkt.write.core.layout.absaetzeAus
+import de.emmpunkt.write.core.layout.layoutAbsaetze
 
 /** Was bei einem einzelnen Bogen herauskommt. */
 data class BogenBefund(
@@ -29,7 +30,7 @@ data class BogenBefund(
 /**
  * Rechnet jeden Bogen durch, bevor die Maschine laeuft.
  *
- * Bewusst mit dem VORHANDENEN [layoutText] - derselben Funktion, aus der auch Vorschau und
+ * Bewusst mit dem VORHANDENEN [layoutAbsaetze] - derselben Funktion, aus der auch Vorschau und
  * G-Code entstehen. Ein zweiter Weg, "passt das?" zu beantworten, koennte von dem abweichen,
  * was der Stift spaeter faehrt.
  *
@@ -38,11 +39,13 @@ data class BogenBefund(
 fun pruefeBogen(
     zeilen: List<WerteZeile>,
     vorlage: String,
-    style: TextStyle,
+    stile: List<TextStyle>,
+    zuordnung: List<Int>,
     frame: Frame,
-    font: StrokeFont,
+    schrift: (String) -> StrokeFont,
 ): List<BogenBefund> = zeilen.mapIndexed { index, zeile ->
-    val laid = layoutText(einsetzen(vorlage, zeile.felder), style, frame, font)
+    val text = einsetzen(vorlage, zeile.felder)
+    val laid = layoutAbsaetze(absaetzeAus(text, stile, zuordnung, schrift), frame)
     BogenBefund(
         index = index,
         bezeichnung = zeile.bezeichnung,

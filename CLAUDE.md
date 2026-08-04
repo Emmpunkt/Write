@@ -12,26 +12,30 @@ Repository: https://github.com/Emmpunkt/Write (öffentlich, MIT)
 
 ## ➜ AKTUELLER STAND (2026-08-04) — hier anfangen
 
-**Alles auf `main` und nach GitHub gepusht** (`1fa6721`), Arbeitsverzeichnis sauber.
-**256 Tests grün**, am Gerät und an der Maschine verifiziert.
+**Etappe 3 ist vollständig fertig.** 319 Tests grün, am Gerät verifiziert (Migration, Stile
+anlegen/zuweisen/umbenennen, Neustart). Zweig `absatzstile`.
 
-Fertig: Etappen 1, 2a, 2b und **Etappe 3 bis einschließlich Teil 3** (SD-Upload, Notizliste,
-Vorlagen mit Platzhaltern, Serienlauf) — dazu die beiden Korrekturrunden vom 2026-08-04, mit
-denen Blatt und Textrahmen getrennt wurden.
+Fertig: Etappen 1, 2a, 2b und **Etappe 3 komplett** (SD-Upload, Notizliste, Vorlagen mit
+Platzhaltern, Serienlauf, **benannte Absatzstile**) — dazu die beiden Korrekturrunden vom
+2026-08-04, mit denen Blatt und Textrahmen getrennt wurden.
 
 **Der Nutzer hat am 2026-08-04 an der Maschine bestätigt, dass der Rahmenversatz auf dem Papier
-dort landet, wo er soll.** Damit ist an der Trennung Blatt/Textrahmen nichts mehr offen.
+dort landet, wo er soll.**
 
-### Das eine offene Thema: Etappe 3 Teil 4 — gemischte Stile je Absatz
+### Offen: Etappe 4 „Gestalten"
 
-Der letzte Punkt der Etappe 3. **Vor dem Bauen ist eine Frage zu stellen, die noch unbeantwortet
-ist** (sie ging in zwei Fehlerberichten unter — im neuen Chat bitte erneut stellen):
+Zwei Wünsche des Nutzers vom 2026-08-04, beide durchgesprochen und entschieden:
 
-> Meint „gemischte Stile" *Schriftart und Größe je Absatz*, oder sollen sich **beliebige
-> markierte Bereiche** im Text einzeln formatieren lassen?
+1. **Text in 90°-Schritten drehen.** Anlass: A6 hoch (105 × 148) passt nicht auf den Tisch
+   (155 × 105). Wer hochkant schreiben will, legt das Blatt quer und dreht den Text. Entschieden:
+   vier Knöpfe (0/90/180/270), **der Satz dreht sich im Rahmen, nicht der Rahmen** — bei 90/270
+   wird auf einer Fläche mit vertauschten Maßen gesetzt und hineingedreht.
+2. **Gezeichnete Zierrahmen**: Rechteck, Doppellinie, abgerundet, Sprechblase, Zierecken.
+   Entschieden: **um den Textrahmen mit einstellbarem Abstand** (der Textsatz bleibt unberührt)
+   und **selbst gerechnet** statt als Grafiken mitgeliefert (verzerrungsfrei bei jedem
+   Seitenverhältnis, keine Lizenzfrage).
 
-Das ist kein Detail: Das zweite bedeutet Textauswahl, Formatspuren im Editor und ein anderes
-Speicherformat für die Notiz — deutlich mehr Arbeit als das erste. Nicht auf Verdacht anfangen.
+Der Plan dazu steht in `docs/superpowers/specs/` bzw. im Plan der Sitzung.
 
 ### Wenn du hier neu einsteigst
 
@@ -397,6 +401,45 @@ Wiederholbar mit `./gradlew :machine:test -PplotterHost=<ip> -PplotterPlot=true`
 (`LivePlotTest`). Das zweite Flag ist Absicht: `-PplotterHost` allein startet nur die lesenden
 Fälle, ein Test der den Stift aufsetzt darf nicht versehentlich mitlaufen.
 
+### Teil 4 steht: benannte Absatzstile (2026-08-04)
+
+Die lange offene Frage ist beantwortet: **absatzweise, nicht beliebige markierte Bereiche**, und
+zwar über **benannte Stile** („Überschrift", „Fließtext"), die man Absätzen zuweist. Je Stil
+wechseln **Schrift, Größe, Ausrichtung**; das Feintuning bleibt dokumentweit. Die Stilliste
+gehört der Notiz, eine neue erbt sie von der zuletzt geöffneten.
+
+**Die Stile haben `fontId`, `sizeMm` und `align` ERSETZT**, nicht ergänzt — in `AppSettings`,
+`NoteEntity` und `TemplateEntity`. Stil 1 ist der Grundstil. Nebeneinander wären es zwei Orte
+für dieselbe Information gewesen, und genau daran hat sich dieses Projekt schon zweimal
+verletzt. Der Preis war eine Migration (**Room 4 → 5**, Tabellenneubau für beide Tabellen) und
+ein Rückfall im DataStore auf die alten Schlüssel.
+
+Zwei Dinge, die beim Bauen nicht offensichtlich waren:
+
+1. **Der Zeilenvorschub am Absatzwechsel ist `max(oben, unten)`.** Der Wert der oberen Zeile
+   allein ließe kleinen Text in den Unterlängen einer großen Überschrift sitzen, der der unteren
+   allein gäbe der Überschrift zu wenig Luft. Nur das Maximum trägt in beide Richtungen.
+   Entsprechend ist `requiredHeightMm` eine **Summe** der Vorschübe — `(n-1) * lineAdvance` gilt
+   nur bei einheitlicher Größe.
+2. **Die Zuordnung Absatz → Stil muss beim Tippen nachgeführt werden**
+   (`zuordnungNachTextaenderung` in `AbsatzLogik.kt`). Ohne das verrutscht hinter jedem
+   eingefügten Absatz alles. Verglichen wird gemeinsames Präfix und Suffix; neue Absätze erben
+   den Stil des Absatzes davor, was den häufigsten Fall (Eingabetaste mitten im Text) trifft.
+
+**Einpassen** skaliert seit Teil 4 alle Stile gemeinsam (`fitSkalierung`): gesucht wird die
+Größe von Stil 1 auf demselben 0,1-mm-Raster, die übrigen wandern proportional mit. Der
+Suchbereich ist so eingeengt, dass **jeder** Stil im Reglerbereich bleibt — sonst lieferte das
+Einpassen bei doppelt so großer Überschrift eine Größe, die der Regler nicht darstellen kann.
+
+**Speicherformat** (kein JSON-Lib im Projekt): Stile als eine Zeile je Stil mit `|` als
+Feldtrenner, Zuordnung als Komma-Liste von Indizes. Ein unlesbarer Zuordnungseintrag wird zu 0,
+**behält aber seinen Platz** — ihn wegzulassen verschöbe alle folgenden Absätze.
+
+**Am Gerät geprüft (2026-08-04):** Die vorhandene Notiz kam unverändert durch die Migration
+(Zierschrift 14,3 mm), zweiter Stil angelegt und zugewiesen, Größe getrennt eingestellt,
+Neustart überstanden (`Text|zierschrift|14.3|LEFT\nStil 2|zierschrift|7.4|LEFT`, Zuordnung
+`0,1`). **Noch nicht an der Maschine gefahren.**
+
 ## Bekannte offene Punkte
 
 - ~~Die Schrift „Allure" gefällt dem Nutzer nicht~~ **Erledigt (2026-08-03): Allure bleibt.**
@@ -408,8 +451,9 @@ Fälle, ein Test der den Stift aufsetzt darf nicht versehentlich mitlaufen.
   Geschätzt 59 s, real 30–45 s. Ausdrücklich hinten angestellt („die Zeitschätzung ist mir
   nicht wichtig"). Das braucht eine Messreihe über mehrere Schriften und Größen, keine
   Nachjustierung an einem einzelnen Wert.
-- **Offene Frage zu Etappe 3 Teil 4** — siehe den Stand-Abschnitt ganz oben. Vor dem Bauen
-  klären, sonst entsteht womöglich das Falsche.
+- **Etappe 3 Teil 4 ist gebaut**, aber noch nicht an der Maschine gefahren. Ein Bogen mit
+  großer Überschrift über kleinem Fließtext steht aus — nachmessen, ob der Abstand zur ersten
+  Textzeile stimmt.
 - Keine automatische Silbentrennung (bewusst): Sie bräuchte Sprachwissen und läge bei
   zusammengesetzten Wörtern regelmäßig daneben. Stattdessen wirkt ein vom Nutzer gesetzter
   Bindestrich als Trennstelle, und hart getrennte Wörter werden im Editor rot markiert.

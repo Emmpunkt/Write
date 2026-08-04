@@ -32,9 +32,10 @@ data class TemplateEntity(
     val updatedAt: Long,
 
     // Schriftbild
-    val fontId: String,
-    val sizeMm: Float,
-    val align: String,
+    /** Die benannten Absatzstile, eine Zeile je Stil - siehe `Stilformat.kt`. */
+    val stile: String,
+    /** Stilindex je Absatz des Vorlagentextes, durch Komma getrennt. */
+    val absatzZuordnung: String,
     val lineSpacing: Float,
     val letterSpacing: Float,
     val wordSpacing: Float,

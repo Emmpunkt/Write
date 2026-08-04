@@ -101,13 +101,16 @@ fun einsetzen(text: String, werte: Map<String, String>): String =
 private const val VORLAGE_BEISPIEL = "{anrede} {name},"
 
 /**
- * Die Ausrichtung als Enum.
+ * Die Stile der Vorlage, garantiert nicht leer.
  *
- * Wie bei der Notiz: ein unbekannter Name in der Datenbank fuehrt zur Vorgabe, nicht zum
- * Absturz beim Oeffnen einer alten Vorlage.
+ * Wie bei der Notiz: eine unlesbare Spalte fuehrt zum Grundstil, nicht zum Absturz beim
+ * Oeffnen einer alten Vorlage.
  */
-fun TemplateEntity.alignEnum(): Align =
-    runCatching { Align.valueOf(align) }.getOrElse { AppSettings().align }
+fun TemplateEntity.stilListe(): List<Absatzstil> =
+    stileAusText(stile).ifEmpty { listOf(AppSettings.GRUNDSTIL) }
+
+/** Die Absatzzuordnung der Vorlage. */
+fun TemplateEntity.zuordnung(): List<Int> = zuordnungAusText(absatzZuordnung)
 
 /**
  * Legt Schriftbild UND Textrahmen der Vorlage ueber die Einstellungen.
@@ -120,9 +123,7 @@ fun TemplateEntity.alignEnum(): Align =
  * neu auf die AKTUELLEN globalen Werte legen, wenn sich Host oder Vorschub geaendert haben.
  */
 fun AppSettings.mitVorlage(v: TemplateEntity): AppSettings = copy(
-    fontId = v.fontId,
-    sizeMm = v.sizeMm,
-    align = v.alignEnum(),
+    stile = v.stilListe(),
     lineSpacing = v.lineSpacing,
     letterSpacing = v.letterSpacing,
     wordSpacing = v.wordSpacing,
@@ -140,15 +141,15 @@ fun AppSettings.zuVorlage(
     text: String,
     werte: String,
     jetzt: Long,
+    zuordnung: List<Int> = emptyList(),
 ) = TemplateEntity(
     id = id,
     name = name,
     text = text,
     werte = werte,
     updatedAt = jetzt,
-    fontId = fontId,
-    sizeMm = sizeMm,
-    align = align.name,
+    stile = stileAlsText(stile),
+    absatzZuordnung = zuordnungAlsText(zuordnung),
     lineSpacing = lineSpacing,
     letterSpacing = letterSpacing,
     wordSpacing = wordSpacing,

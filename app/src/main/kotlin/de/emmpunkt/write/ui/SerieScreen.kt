@@ -25,7 +25,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import de.emmpunkt.write.data.absatzAmCursor
 import de.emmpunkt.write.data.AppSettings
 import de.emmpunkt.write.data.SerienZustand
 import de.emmpunkt.write.machine.SendProgress
@@ -45,6 +48,9 @@ fun SerieScreen(
     onVorlageLoeschen: (Long) -> Unit,
     onNameChange: (String) -> Unit,
     onTextChange: (String) -> Unit,
+    /** Cursorposition im Vorlagentext, als Absatzindex. */
+    onCursor: (Int) -> Unit,
+    onStilZuweisen: (Int) -> Unit,
     onWerteChange: (String) -> Unit,
     onSettingsChange: ((AppSettings) -> AppSettings) -> Unit,
     onSettingsChangeLive: ((AppSettings) -> AppSettings) -> Unit,
@@ -97,9 +103,20 @@ fun SerieScreen(
             singleLine = true,
         )
 
+        // Wie im Editor: nur ueber die Auswahl im Feld ist bekannt, in welchem Absatz der
+        // Cursor steht - und nur so laesst sich einem Absatz ein Stil zuweisen.
+        var feld by remember(serie.aktuelleId) { mutableStateOf(TextFieldValue(serie.text)) }
+        if (feld.text != serie.text) {
+            feld = TextFieldValue(serie.text, TextRange(serie.text.length))
+        }
+
         OutlinedTextField(
-            value = serie.text,
-            onValueChange = onTextChange,
+            value = feld,
+            onValueChange = { neu ->
+                feld = neu
+                if (neu.text != serie.text) onTextChange(neu.text)
+                onCursor(absatzAmCursor(neu.text, neu.selection.start))
+            },
             modifier = Modifier.fillMaxWidth().height(120.dp),
             label = { Text("Vorlage") },
             placeholder = { Text("{anrede} {name},") },
@@ -109,6 +126,9 @@ fun SerieScreen(
         StilLeiste(
             settings = serie.settings,
             textLeer = serie.zeilen.isEmpty(),
+            absatzIndex = serie.absatzIndex,
+            stilIndex = serie.zuordnung.getOrElse(serie.absatzIndex) { 0 },
+            onStilZuweisen = onStilZuweisen,
             onChange = onSettingsChange,
             onChangeLive = onSettingsChangeLive,
             onCommit = onSettingsCommit,

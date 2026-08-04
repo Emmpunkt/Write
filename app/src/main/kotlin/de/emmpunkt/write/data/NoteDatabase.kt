@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [NoteEntity::class, TemplateEntity::class], version = 4, exportSchema = false)
+@Database(entities = [NoteEntity::class, TemplateEntity::class], version = 5, exportSchema = false)
 abstract class NoteDatabase : RoomDatabase() {
 
     abstract fun notes(): RoomNoteDao
@@ -130,6 +130,81 @@ abstract class NoteDatabase : RoomDatabase() {
         }
 
         /**
+         * Die Tabellen auf Stand 5, wieder WOERTLICH aus dem erzeugten `NoteDatabase_Impl.kt`.
+         * Der Tabellenname wird beim Umbau durch den Platzhalter ersetzt.
+         */
+        private const val CREATE_NOTES_V5 =
+            "CREATE TABLE IF NOT EXISTS `notes` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT " +
+                "NULL, `text` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, `stile` TEXT NOT " +
+                "NULL, `absatzZuordnung` TEXT NOT NULL, `lineSpacing` REAL NOT NULL, " +
+                "`letterSpacing` REAL NOT NULL, `wordSpacing` REAL NOT NULL, `slantDeg` REAL " +
+                "NOT NULL)"
+
+        private const val CREATE_TEMPLATES_V5 =
+            "CREATE TABLE IF NOT EXISTS `templates` (`id` INTEGER PRIMARY KEY AUTOINCREMENT " +
+                "NOT NULL, `name` TEXT NOT NULL, `text` TEXT NOT NULL, `werte` TEXT NOT NULL, " +
+                "`updatedAt` INTEGER NOT NULL, `stile` TEXT NOT NULL, `absatzZuordnung` TEXT " +
+                "NOT NULL, `lineSpacing` REAL NOT NULL, `letterSpacing` REAL NOT NULL, " +
+                "`wordSpacing` REAL NOT NULL, `slantDeg` REAL NOT NULL, `rahmenXMm` REAL NOT " +
+                "NULL, `rahmenYMm` REAL NOT NULL, `rahmenBreiteMm` REAL NOT NULL, " +
+                "`rahmenHoeheMm` REAL NOT NULL)"
+
+        /**
+         * Aus den drei alten Spalten wird die eine Stilzeile: `Text|<schrift>|<groesse>|<lage>`.
+         *
+         * Das Format steht in `Stilformat.kt`; hier steht es zwangslaeufig ein zweites Mal, weil
+         * eine Migration kein Kotlin ausfuehren kann. Aendert sich das Format, muss diese Zeile
+         * NICHT nachgezogen werden - sie beschreibt den Stand 5 und bleibt es, sonst bekaemen
+         * Geraete, die spaeter migrieren, ein anderes Ergebnis als die von damals.
+         */
+        private const val STIL_AUS_ALTEN_SPALTEN =
+            "'Text' || '|' || `fontId` || '|' || CAST(`sizeMm` AS TEXT) || '|' || `align`"
+
+        /**
+         * Version 4 -> 5: Aus Schrift, Groesse und Ausrichtung wird ein benannter Absatzstil.
+         *
+         * Bis Stand 4 hatte ein Dokument genau ein Schriftbild. Ab Stand 5 traegt es eine Liste
+         * benannter Stile und je Absatz die Angabe, welcher gilt. Die drei alten Spalten
+         * verschwinden - sie stuenden sonst neben den Stilen als zweiter Ort fuer dieselbe
+         * Information, und genau daran hat sich dieses Projekt schon zweimal verletzt.
+         *
+         * Am Ergebnis auf dem Papier aendert sich nichts: Jedes Dokument bekommt genau einen
+         * Stil mit den bisherigen Werten, und eine leere Zuordnung heisst "jeder Absatz nimmt
+         * den ersten Stil".
+         *
+         * SQLite kann keine Spalten entfernen, deshalb wieder der Umweg ueber eine neue Tabelle
+         * - dasselbe Verfahren wie bei MIGRATION_3_4.
+         */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(CREATE_NOTES_V5.replace("`notes`", "`notes_neu`"))
+                db.execSQL(
+                    "INSERT INTO `notes_neu` (`id`, `text`, `updatedAt`, `stile`, " +
+                        "`absatzZuordnung`, `lineSpacing`, `letterSpacing`, `wordSpacing`, " +
+                        "`slantDeg`) SELECT `id`, `text`, `updatedAt`, " +
+                        STIL_AUS_ALTEN_SPALTEN + ", '', " +
+                        "`lineSpacing`, `letterSpacing`, `wordSpacing`, `slantDeg` FROM `notes`",
+                )
+                db.execSQL("DROP TABLE `notes`")
+                db.execSQL("ALTER TABLE `notes_neu` RENAME TO `notes`")
+
+                db.execSQL(CREATE_TEMPLATES_V5.replace("`templates`", "`templates_neu`"))
+                db.execSQL(
+                    "INSERT INTO `templates_neu` (`id`, `name`, `text`, `werte`, `updatedAt`, " +
+                        "`stile`, `absatzZuordnung`, `lineSpacing`, `letterSpacing`, " +
+                        "`wordSpacing`, `slantDeg`, `rahmenXMm`, `rahmenYMm`, `rahmenBreiteMm`, " +
+                        "`rahmenHoeheMm`) SELECT `id`, `name`, `text`, `werte`, `updatedAt`, " +
+                        STIL_AUS_ALTEN_SPALTEN + ", '', " +
+                        "`lineSpacing`, `letterSpacing`, `wordSpacing`, `slantDeg`, " +
+                        "`rahmenXMm`, `rahmenYMm`, `rahmenBreiteMm`, `rahmenHoeheMm` " +
+                        "FROM `templates`",
+                )
+                db.execSQL("DROP TABLE `templates`")
+                db.execSQL("ALTER TABLE `templates_neu` RENAME TO `templates`")
+            }
+        }
+
+        /**
          * Eine Datenbank fuer die ganze App.
          *
          * Room haelt Verbindungen und einen Zwischenspeicher; zwei Instanzen auf derselben
@@ -140,7 +215,7 @@ abstract class NoteDatabase : RoomDatabase() {
                 context.applicationContext,
                 NoteDatabase::class.java,
                 "write_notes.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build().also { instanz = it }
         }
     }

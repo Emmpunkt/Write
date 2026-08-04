@@ -14,8 +14,11 @@ class BogenPruefungTest {
 
     /** Kleine Karte mit passendem Textrahmen, damit ein langer Name zuverlaessig ueberlaeuft. */
     private val klein = AppSettings(
-        paperWidthMm = 60f, paperHeightMm = 30f, marginMm = 4f, sizeMm = 6f,
+        paperWidthMm = 60f, paperHeightMm = 30f, marginMm = 4f,
+        stile = listOf(AppSettings.GRUNDSTIL.copy(sizeMm = 6f)),
     ).blattFuellen()
+
+    private val schrift: (String) -> de.emmpunkt.write.core.font.StrokeFont = { font }
 
     private fun zeilen(vararg werte: String) =
         werteZeilen(werte.joinToString("\n"), listOf("name"))
@@ -25,9 +28,10 @@ class BogenPruefungTest {
         val befunde = pruefeBogen(
             zeilen = zeilen("Anna"),
             vorlage = "{name}",
-            style = klein.toTextStyle(),
+            stile = klein.toTextStyles(),
+            zuordnung = emptyList(),
             frame = klein.toFrame(),
-            font = font,
+            schrift = schrift,
         )
 
         assertEquals(1, befunde.size)
@@ -39,9 +43,10 @@ class BogenPruefungTest {
         val befunde = pruefeBogen(
             zeilen = zeilen("Anna", "Christiane Schmidt-Wagner von Hohenlohe zu Langenburg"),
             vorlage = "{name}",
-            style = klein.toTextStyle(),
+            stile = klein.toTextStyles(),
+            zuordnung = emptyList(),
             frame = klein.toFrame(),
-            font = font,
+            schrift = schrift,
         )
 
         assertTrue(befunde[0].inOrdnung)
@@ -54,9 +59,10 @@ class BogenPruefungTest {
         val befunde = pruefeBogen(
             zeilen = zeilen("Anna", "Bernd"),
             vorlage = "{name}",
-            style = klein.toTextStyle(),
+            stile = klein.toTextStyles(),
+            zuordnung = emptyList(),
             frame = klein.toFrame(),
-            font = font,
+            schrift = schrift,
         )
 
         assertEquals(listOf(0, 1), befunde.map { it.index })
@@ -70,9 +76,10 @@ class BogenPruefungTest {
         val befunde = pruefeBogen(
             zeilen = zeilen("Donaudampfschifffahrtsgesellschaftskapitaen"),
             vorlage = "{name}",
-            style = klein.toTextStyle(),
+            stile = klein.toTextStyles(),
+            zuordnung = emptyList(),
             frame = klein.toFrame(),
-            font = font,
+            schrift = schrift,
         )
 
         assertFalse(befunde[0].inOrdnung)
@@ -86,9 +93,10 @@ class BogenPruefungTest {
         val befunde = pruefeBogen(
             zeilen = gemischt.filter { it.fehler == null },
             vorlage = "{anrede} {name}",
-            style = klein.toTextStyle(),
+            stile = klein.toTextStyles(),
+            zuordnung = emptyList(),
             frame = klein.toFrame(),
-            font = font,
+            schrift = schrift,
         )
 
         assertEquals(1, befunde.size)

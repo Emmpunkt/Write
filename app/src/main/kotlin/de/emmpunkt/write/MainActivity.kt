@@ -74,6 +74,8 @@ fun WriteApp(viewModel: PlotterViewModel = viewModel()) {
         val machine by viewModel.machine.collectAsStateWithLifecycle()
         val notizen by viewModel.notizen.collectAsStateWithLifecycle()
         val aktuelleNotizId by viewModel.aktuelleNotizId.collectAsStateWithLifecycle()
+        val absatzIndex by viewModel.absatzIndex.collectAsStateWithLifecycle()
+        val stilIndex by viewModel.stilIndex.collectAsStateWithLifecycle()
         val serie by viewModel.serie.collectAsStateWithLifecycle()
 
         // Bildschirm anlassen, solange ein Auftrag laeuft. Das ist die wirksamste Massnahme
@@ -115,6 +117,10 @@ fun WriteApp(viewModel: PlotterViewModel = viewModel()) {
                     document = document,
                     machine = machine,
                     onTextChange = viewModel::onTextChanged,
+                    absatzIndex = absatzIndex,
+                    stilIndex = stilIndex,
+                    onCursor = viewModel::onCursorAbsatz,
+                    onStilZuweisen = viewModel::stilZuweisen,
                     onSettingsChange = viewModel::updateSettings,
                     onSettingsChangeLive = viewModel::updateSettingsLive,
                     onSettingsCommit = viewModel::commitSettings,
@@ -138,6 +144,8 @@ fun WriteApp(viewModel: PlotterViewModel = viewModel()) {
                     onVorlageLoeschen = viewModel::vorlageLoeschen,
                     onNameChange = viewModel::vorlageNameGeaendert,
                     onTextChange = viewModel::vorlageTextGeaendert,
+                    onCursor = viewModel::serieCursorAbsatz,
+                    onStilZuweisen = viewModel::serieStilZuweisen,
                     onWerteChange = viewModel::werteGeaendert,
                     onSettingsChange = viewModel::serieSettingsAendern,
                     onSettingsChangeLive = viewModel::serieSettingsLive,
