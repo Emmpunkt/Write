@@ -19,13 +19,15 @@ Fertig: Etappen 1, 2a, 2b, **Etappe 3 komplett** (SD-Upload, Notizliste, Vorlage
 Platzhaltern, Serienlauf, benannte Absatzstile) und **Etappe 4 „Gestalten"** (Text drehen,
 gezeichnete Rahmen).
 
-**Das eine, was noch aussteht: die Maschine.** Weder die Absatzstile noch die Drehung noch die
-Rahmen sind auf Papier gefahren. Drei Bögen wären zu prüfen:
+**An der Maschine gefahren (2026-08-04):**
 
-1. Große zentrierte Überschrift über kleinem Fließtext — sitzt der Abstand zur ersten Textzeile?
-2. Ein hochkant gedrehter Bogen — steht der Text da, wo die Vorschau ihn zeigt?
-3. Ein Bogen mit Sprechblase — sitzt der Rahmen richtig um den Text, und bleibt er auf dem
-   Papier?
+1. **Überschrift über Fließtext — vom Nutzer gefahren, „es passte alles".** Damit sind die
+   Absatzstile und die Vorschubregel am Absatzwechsel auf Papier bestätigt.
+2. **Hochkant gedrehter Bogen — vom Nutzer gefahren, „es passte alles".** Drehung bestätigt.
+3. **Bogen mit gezeichnetem Rahmen (Zierecken) — gefahren.** 529 Zeilen, 33 Hübe, ~50 s, kein
+   Alarm, Endzustand sauber auf dem Arbeitsnullpunkt mit angehobenem Stift. Damit ist auch die
+   erweiterte Grenzprüfung (Rahmen + Text statt nur Text) einmal durch die echte Maschine
+   gegangen. **Die Sichtprüfung des Blattes steht noch aus.**
 
 ### Wenn du hier neu einsteigst
 
