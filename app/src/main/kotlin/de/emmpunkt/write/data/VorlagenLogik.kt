@@ -112,9 +112,9 @@ fun TemplateEntity.alignEnum(): Align =
 /**
  * Legt Schriftbild UND Textrahmen der Vorlage ueber die Einstellungen.
  *
- * Maschine und Verbindung bleiben unberuehrt - sie beschreiben das Geraet, nicht das Dokument.
- * Der Rahmen dagegen gehoert ganz der Vorlage, samt Position: Sie beschreibt, wo auf dem Tisch
- * der Text stehen soll.
+ * Maschine, Verbindung UND BLATT bleiben unberuehrt - sie beschreiben das Geraet und das
+ * Papier, das gerade aufliegt, nicht das Dokument. Der Textrahmen dagegen gehoert ganz der
+ * Vorlage, samt Position: Sie beschreibt, wo auf dem Blatt der Text stehen soll.
  *
  * Bewusst als Ueberlagerung und nicht als Ersatz: So laesst sich eine offene Vorlage jederzeit
  * neu auf die AKTUELLEN globalen Werte legen, wenn sich Host oder Vorschub geaendert haben.
@@ -127,11 +127,10 @@ fun AppSettings.mitVorlage(v: TemplateEntity): AppSettings = copy(
     letterSpacing = v.letterSpacing,
     wordSpacing = v.wordSpacing,
     slantDeg = v.slantDeg,
-    paperWidthMm = v.paperWidthMm,
-    paperHeightMm = v.paperHeightMm,
-    marginMm = v.marginMm,
-    paperOffsetXMm = v.paperOffsetXMm,
-    paperOffsetYMm = v.paperOffsetYMm,
+    rahmenXMm = v.rahmenXMm,
+    rahmenYMm = v.rahmenYMm,
+    rahmenBreiteMm = v.rahmenBreiteMm,
+    rahmenHoeheMm = v.rahmenHoeheMm,
 )
 
 /** Der umgekehrte Weg: aus dem Arbeitszustand wird wieder eine Vorlage zum Speichern. */
@@ -154,11 +153,10 @@ fun AppSettings.zuVorlage(
     letterSpacing = letterSpacing,
     wordSpacing = wordSpacing,
     slantDeg = slantDeg,
-    paperWidthMm = paperWidthMm,
-    paperHeightMm = paperHeightMm,
-    marginMm = marginMm,
-    paperOffsetXMm = paperOffsetXMm,
-    paperOffsetYMm = paperOffsetYMm,
+    rahmenXMm = rahmenXMm,
+    rahmenYMm = rahmenYMm,
+    rahmenBreiteMm = rahmenBreiteMm,
+    rahmenHoeheMm = rahmenHoeheMm,
 )
 
 /**

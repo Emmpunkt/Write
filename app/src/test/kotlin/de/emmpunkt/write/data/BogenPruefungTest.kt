@@ -12,8 +12,10 @@ class BogenPruefungTest {
 
     private val font = Fonts.load(Fonts.defaultId)
 
-    /** Kleine Karte, damit ein langer Name zuverlaessig ueberlaeuft. */
-    private val klein = AppSettings(paperWidthMm = 60f, paperHeightMm = 30f, marginMm = 4f, sizeMm = 6f)
+    /** Kleine Karte mit passendem Textrahmen, damit ein langer Name zuverlaessig ueberlaeuft. */
+    private val klein = AppSettings(
+        paperWidthMm = 60f, paperHeightMm = 30f, marginMm = 4f, sizeMm = 6f,
+    ).blattFuellen()
 
     private fun zeilen(vararg werte: String) =
         werteZeilen(werte.joinToString("\n"), listOf("name"))
@@ -95,14 +97,23 @@ class BogenPruefungTest {
     // ---- Rahmenfehler ----
 
     @Test
-    fun `ein Rand breiter als das Blatt wird als Meldung geliefert statt zu werfen`() {
-        // Frame wirft im Konstruktor. Ohne diese Abfangung stuerzte die App ab, sobald jemand
-        // 8 mm Rand auf einer 10-mm-Karte einstellt.
-        val unmoeglich = AppSettings(paperWidthMm = 10f, paperHeightMm = 10f, marginMm = 8f)
+    fun `ein Rahmen ohne Flaeche wird als Meldung geliefert statt zu werfen`() {
+        // Frame wirft im Konstruktor. Ohne diese Abfangung stuerzte die App ab, sobald beim
+        // Tippen kurzzeitig eine 0 im Feld steht.
+        val unmoeglich = klein.copy(rahmenBreiteMm = 0f)
 
         val fehler = rahmenFehler(unmoeglich)
 
         assertNotNull(fehler, "Der unmoegliche Rahmen wurde nicht bemaengelt")
+    }
+
+    @Test
+    fun `ein Rahmen ueber der Blattkante sperrt den Satz`() {
+        // Sonst schriebe der Stift bei einem Satz Platzkarten neben die Karte auf den Tisch,
+        // und vor dem Plotten faellt es niemandem auf.
+        val hinaus = klein.copy(rahmenXMm = 30f, rahmenBreiteMm = 52f)
+
+        assertNotNull(rahmenFehler(hinaus), "Der Ueberstand wurde nicht bemaengelt")
     }
 
     @Test

@@ -43,12 +43,22 @@ data class AppSettings(
     /** Zuege in Schreibrichtung zeichnen statt nach kuerzesten Wegen zu sortieren. */
     val naturalWriteOrder: Boolean = true,
 
-    // Papier
+    // Blatt: was tatsaechlich auf dem Tisch liegt. Global, weil es die Maschine beschreibt und
+    // nicht das Dokument - beim Umschalten der Notiz wechselt nicht das eingelegte Papier.
     val paperOffsetXMm: Float = 0f,
     val paperOffsetYMm: Float = 0f,
     val paperWidthMm: Float = 148f,
     val paperHeightMm: Float = 105f,
+    /** Nur noch die Vorgabe fuer [blattFuellen] - der Textsatz kennt keinen Rand mehr. */
     val marginMm: Float = 8f,
+
+    // Textrahmen: der Kasten, in den der Text gesetzt wird. Gemessen ab der linken unteren
+    // Ecke des BLATTES, nicht des Tisches. Gehoert zum Dokument und wandert mit einer Vorlage
+    // mit; die Vorgabe entspricht dem alten "Blatt A6 mit 8 mm Rand".
+    val rahmenXMm: Float = 8f,
+    val rahmenYMm: Float = 8f,
+    val rahmenBreiteMm: Float = 132f,
+    val rahmenHoeheMm: Float = 89f,
 
     // Schrift
     val fontId: String = Fonts.defaultId,
@@ -109,10 +119,17 @@ data class AppSettings(
         rapidZMmMin = maxOf(MachineProfile().rapidZMmMin, feedZMmMin),
         workAreaXMm = workAreaXMm,
         workAreaYMm = workAreaYMm,
-        paperOffsetXMm = paperOffsetXMm,
-        paperOffsetYMm = paperOffsetYMm,
+        // Der Textsatz rechnet in Rahmen-Koordinaten. Auf den Tisch kommt der Rahmen erst
+        // hier - und dafuer zaehlen beide Verschiebungen: die des Blattes am Anschlag und
+        // die des Rahmens auf dem Blatt.
+        paperOffsetXMm = ursprungXMm,
+        paperOffsetYMm = ursprungYMm,
         naturalWriteOrder = naturalWriteOrder,
     )
+
+    /** Wo die linke untere Ecke des Textrahmens auf dem Tisch liegt. */
+    val ursprungXMm: Float get() = paperOffsetXMm + rahmenXMm
+    val ursprungYMm: Float get() = paperOffsetYMm + rahmenYMm
 
     fun toTextStyle() = TextStyle(
         fontId = fontId,
@@ -124,17 +141,77 @@ data class AppSettings(
         slantDeg = slantDeg,
     )
 
+    /**
+     * Der Textrahmen als Satzflaeche.
+     *
+     * Ohne Raender: der Rahmen IST der nutzbare Bereich. Ein Rand darin waere eine zweite
+     * Stellschraube fuer dieselbe Sache - wer Abstand zum Blattrand will, schiebt den Rahmen.
+     */
     fun toFrame() = Frame(
-        widthMm = paperWidthMm,
-        heightMm = paperHeightMm,
-        margins = Margins.all(marginMm),
+        widthMm = rahmenBreiteMm,
+        heightMm = rahmenHoeheMm,
+        margins = Margins.all(0f),
+    )
+
+    /** Blatt und Rahmen, wie die Vorschau sie braucht. */
+    fun toBlattbild() = Blattbild(
+        blattBreiteMm = paperWidthMm,
+        blattHoeheMm = paperHeightMm,
+        rahmenXMm = rahmenXMm,
+        rahmenYMm = rahmenYMm,
+        frame = toFrame(),
     )
 
     /** Ob das eingestellte Blatt ueberhaupt auf den Tisch passt. */
-    val paperFitsWorkArea: Boolean
-        get() = paperOffsetXMm + paperWidthMm <= workAreaXMm + 0.01f &&
+    val blattPasstAufTisch: Boolean
+        get() = paperOffsetXMm >= -0.01f && paperOffsetYMm >= -0.01f &&
+            paperOffsetXMm + paperWidthMm <= workAreaXMm + 0.01f &&
             paperOffsetYMm + paperHeightMm <= workAreaYMm + 0.01f
+
+    /** Ob der Textrahmen innerhalb des Blattes liegt. */
+    val rahmenPasstAufsBlatt: Boolean
+        get() = rahmenXMm >= -0.01f && rahmenYMm >= -0.01f &&
+            rahmenXMm + rahmenBreiteMm <= paperWidthMm + 0.01f &&
+            rahmenYMm + rahmenHoeheMm <= paperHeightMm + 0.01f
+
+    /**
+     * Legt den Rahmen auf das ganze Blatt, um [marginMm] eingerueckt.
+     *
+     * Der eine Griff, mit dem man aus einem frisch gewaehlten Blattformat einen brauchbaren
+     * Rahmen bekommt, ohne vier Zahlen auszurechnen. Frisst der Rand das Blatt auf, faellt er
+     * weg statt einen Rahmen der Breite 0 zu bauen - `Frame` wirft dabei im Konstruktor.
+     */
+    fun blattFuellen(): AppSettings {
+        val rand = marginMm.coerceAtLeast(0f)
+        val breite = paperWidthMm - 2f * rand
+        val hoehe = paperHeightMm - 2f * rand
+        return if (breite > 0f && hoehe > 0f) {
+            copy(
+                rahmenXMm = rand, rahmenYMm = rand,
+                rahmenBreiteMm = breite, rahmenHoeheMm = hoehe,
+            )
+        } else {
+            copy(
+                rahmenXMm = 0f, rahmenYMm = 0f,
+                rahmenBreiteMm = paperWidthMm, rahmenHoeheMm = paperHeightMm,
+            )
+        }
+    }
 }
+
+/**
+ * Was die Vorschau zeichnet: das Blatt und den Rahmen darin.
+ *
+ * Als eigener Typ, damit `PreviewCanvas` nicht die kompletten Einstellungen entgegennehmen
+ * muss - sie zeichnet Papier und Striche, sie hat mit Vorschueben und Hostnamen nichts zu tun.
+ */
+data class Blattbild(
+    val blattBreiteMm: Float,
+    val blattHoeheMm: Float,
+    val rahmenXMm: Float,
+    val rahmenYMm: Float,
+    val frame: Frame,
+)
 
 /** Uebliche Blattformate, jeweils quer und hoch. */
 object PaperPresets {
@@ -156,7 +233,7 @@ class SettingsRepository(private val context: Context) {
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
         val defaults = AppSettings()
-        AppSettings(
+        val geladen = AppSettings(
             host = p[Keys.host] ?: defaults.host,
             telnetPort = p[Keys.telnetPort] ?: defaults.telnetPort,
             zUpMm = p[Keys.zUp] ?: defaults.zUpMm,
@@ -172,6 +249,10 @@ class SettingsRepository(private val context: Context) {
             paperWidthMm = p[Keys.paperWidth] ?: defaults.paperWidthMm,
             paperHeightMm = p[Keys.paperHeight] ?: defaults.paperHeightMm,
             marginMm = p[Keys.margin] ?: defaults.marginMm,
+            rahmenXMm = p[Keys.rahmenX] ?: defaults.rahmenXMm,
+            rahmenYMm = p[Keys.rahmenY] ?: defaults.rahmenYMm,
+            rahmenBreiteMm = p[Keys.rahmenBreite] ?: defaults.rahmenBreiteMm,
+            rahmenHoeheMm = p[Keys.rahmenHoehe] ?: defaults.rahmenHoeheMm,
             fontId = p[Keys.fontId] ?: defaults.fontId,
             sizeMm = p[Keys.size] ?: defaults.sizeMm,
             align = p[Keys.align]?.let { runCatching { Align.valueOf(it) }.getOrNull() }
@@ -183,6 +264,12 @@ class SettingsRepository(private val context: Context) {
             lastText = p[Keys.lastText] ?: defaults.lastText,
             offeneNotizId = p[Keys.offeneNotizId] ?: defaults.offeneNotizId,
         )
+
+        // Wer die App vor der Trennung von Blatt und Rahmen benutzt hat, hat gespeicherte
+        // Blattwerte, aber keinen Rahmen. Die Vorgabe (A6 mit 8 mm) waere dort schlicht
+        // falsch: bei einer 76er Haftnotiz raunte sie ueber den Rand hinaus. Aus dem
+        // gespeicherten Blatt samt Rand entsteht genau der Rahmen, der vorher gesetzt wurde.
+        if (p[Keys.rahmenBreite] == null) geladen.blattFuellen() else geladen
     }
 
     suspend fun update(s: AppSettings) {
@@ -202,6 +289,10 @@ class SettingsRepository(private val context: Context) {
             p[Keys.paperWidth] = s.paperWidthMm
             p[Keys.paperHeight] = s.paperHeightMm
             p[Keys.margin] = s.marginMm
+            p[Keys.rahmenX] = s.rahmenXMm
+            p[Keys.rahmenY] = s.rahmenYMm
+            p[Keys.rahmenBreite] = s.rahmenBreiteMm
+            p[Keys.rahmenHoehe] = s.rahmenHoeheMm
             p[Keys.fontId] = s.fontId
             p[Keys.size] = s.sizeMm
             p[Keys.align] = s.align.name
@@ -230,6 +321,10 @@ class SettingsRepository(private val context: Context) {
         val paperWidth = floatPreferencesKey("paper_width")
         val paperHeight = floatPreferencesKey("paper_height")
         val margin = floatPreferencesKey("margin")
+        val rahmenX = floatPreferencesKey("rahmen_x")
+        val rahmenY = floatPreferencesKey("rahmen_y")
+        val rahmenBreite = floatPreferencesKey("rahmen_breite")
+        val rahmenHoehe = floatPreferencesKey("rahmen_hoehe")
         val fontId = stringPreferencesKey("font_id")
         val size = floatPreferencesKey("size_mm")
         val align = stringPreferencesKey("align")

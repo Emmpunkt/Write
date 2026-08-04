@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [NoteEntity::class, TemplateEntity::class], version = 3, exportSchema = false)
+@Database(entities = [NoteEntity::class, TemplateEntity::class], version = 4, exportSchema = false)
 abstract class NoteDatabase : RoomDatabase() {
 
     abstract fun notes(): RoomNoteDao
@@ -74,6 +74,62 @@ abstract class NoteDatabase : RoomDatabase() {
         }
 
         /**
+         * Die Vorlagentabelle auf Stand 4, wieder woertlich aus dem erzeugten
+         * `NoteDatabase_Impl.kt`. Der Platzhalter `templates` wird beim Umbau ersetzt.
+         */
+        private const val CREATE_TEMPLATES_V4 =
+            "CREATE TABLE IF NOT EXISTS `templates` (`id` INTEGER PRIMARY KEY AUTOINCREMENT " +
+                "NOT NULL, `name` TEXT NOT NULL, `text` TEXT NOT NULL, `werte` TEXT NOT NULL, " +
+                "`updatedAt` INTEGER NOT NULL, `fontId` TEXT NOT NULL, `sizeMm` REAL NOT NULL, " +
+                "`align` TEXT NOT NULL, `lineSpacing` REAL NOT NULL, `letterSpacing` REAL NOT " +
+                "NULL, `wordSpacing` REAL NOT NULL, `slantDeg` REAL NOT NULL, `rahmenXMm` REAL " +
+                "NOT NULL, `rahmenYMm` REAL NOT NULL, `rahmenBreiteMm` REAL NOT NULL, " +
+                "`rahmenHoeheMm` REAL NOT NULL)"
+
+        /**
+         * Version 3 -> 4: Blatt und Textrahmen werden getrennt.
+         *
+         * Bis Stand 3 war "das Blatt der Vorlage" in Wahrheit der Textkasten - Breite, Hoehe,
+         * Rand und Lage auf dem Tisch in einem. Ein grosses Blatt mit einem kleinen Text
+         * darauf liess sich damit gar nicht beschreiben. Ab Stand 4 haelt die Vorlage nur
+         * noch den Rahmen; das Blatt steht global unter Optionen.
+         *
+         * Umgerechnet wird so, dass sich am Ergebnis auf dem Papier nichts aendert: Der alte
+         * Rand wandert in die Lage (er war der Abstand vom Kastenrand zum Text), und aus
+         * Kasten minus zweimal Rand wird die neue Rahmengroesse.
+         *
+         * Der alte Versatz zaehlte ab der Tischecke, der neue ab der Blattecke. Solange das
+         * Blatt bei 0/0 liegt - die Vorgabe -, ist das dieselbe Stelle. Liegt es woanders,
+         * verschiebt sich der Rahmen um diesen Betrag; der Wert steht sichtbar im Feld und
+         * laesst sich in einem Zug richtigstellen. Raten waere hier schlechter, denn die
+         * Migration sieht die globalen Einstellungen nicht - die liegen im DataStore.
+         *
+         * SQLite kann keine Spalten entfernen, deshalb der Umweg ueber eine neue Tabelle.
+         */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(CREATE_TEMPLATES_V4.replace("`templates`", "`templates_neu`"))
+                db.execSQL(
+                    "INSERT INTO `templates_neu` (`id`, `name`, `text`, `werte`, `updatedAt`, " +
+                        "`fontId`, `sizeMm`, `align`, `lineSpacing`, `letterSpacing`, " +
+                        "`wordSpacing`, `slantDeg`, `rahmenXMm`, `rahmenYMm`, `rahmenBreiteMm`, " +
+                        "`rahmenHoeheMm`) SELECT `id`, `name`, `text`, `werte`, `updatedAt`, " +
+                        "`fontId`, `sizeMm`, `align`, `lineSpacing`, `letterSpacing`, " +
+                        "`wordSpacing`, `slantDeg`, " +
+                        "`paperOffsetXMm` + `marginMm`, `paperOffsetYMm` + `marginMm`, " +
+                        // Der untere Anschlag verhindert einen Rahmen der Breite 0: `Frame`
+                        // wirft dann im Konstruktor, und die Vorlage waere nicht mehr zu
+                        // oeffnen. Betrifft nur Vorlagen, deren Rand groesser war als der
+                        // halbe Kasten - die konnten ohnehin nichts schreiben.
+                        "MAX(`paperWidthMm` - 2 * `marginMm`, 1.0), " +
+                        "MAX(`paperHeightMm` - 2 * `marginMm`, 1.0) FROM `templates`",
+                )
+                db.execSQL("DROP TABLE `templates`")
+                db.execSQL("ALTER TABLE `templates_neu` RENAME TO `templates`")
+            }
+        }
+
+        /**
          * Eine Datenbank fuer die ganze App.
          *
          * Room haelt Verbindungen und einen Zwischenspeicher; zwei Instanzen auf derselben
@@ -84,7 +140,8 @@ abstract class NoteDatabase : RoomDatabase() {
                 context.applicationContext,
                 NoteDatabase::class.java,
                 "write_notes.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instanz = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .build().also { instanz = it }
         }
     }
 }

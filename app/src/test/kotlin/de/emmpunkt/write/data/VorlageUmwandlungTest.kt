@@ -21,16 +21,15 @@ class VorlageUmwandlungTest {
         letterSpacing = 0.2f,
         wordSpacing = -0.1f,
         slantDeg = 12f,
-        paperWidthMm = 100f,
-        paperHeightMm = 70f,
-        marginMm = 6f,
-        paperOffsetXMm = 12f,
-        paperOffsetYMm = 8f,
+        rahmenXMm = 12f,
+        rahmenYMm = 8f,
+        rahmenBreiteMm = 100f,
+        rahmenHoeheMm = 70f,
     )
 
     @Test
-    fun `die Vorlage legt Schriftbild UND Blatt ueber die Einstellungen`() {
-        // Der Unterschied zur Notiz: eine Grusskarte bringt ihr Format mit.
+    fun `die Vorlage legt Schriftbild UND Textrahmen ueber die Einstellungen`() {
+        // Der Unterschied zur Notiz: eine Grusskarte bringt ihren Textkasten mit.
         val s = vorgabe.mitVorlage(vorlage())
 
         assertEquals("serif", s.fontId)
@@ -40,32 +39,43 @@ class VorlageUmwandlungTest {
         assertEquals(0.2f, s.letterSpacing)
         assertEquals(-0.1f, s.wordSpacing)
         assertEquals(12f, s.slantDeg)
-        assertEquals(100f, s.paperWidthMm)
-        assertEquals(70f, s.paperHeightMm)
-        assertEquals(6f, s.marginMm)
+        assertEquals(100f, s.rahmenBreiteMm)
+        assertEquals(70f, s.rahmenHoeheMm)
     }
 
     @Test
     fun `die Vorlage bringt auch ihre Position mit`() {
-        // Korrektur vom 2026-08-04: Der Rahmen ist in Wahrheit eine Textbox, kein Blatt am
-        // Anschlag. Wer auf einer Grusskarte unten rechts schreiben will, braucht Groesse UND
-        // Position in derselben Vorlage. Vorher war der Versatz global - dadurch liess sich
-        // die Position im Serienmodus ueberhaupt nicht einstellen.
-        val eigene = vorgabe.copy(paperOffsetXMm = 5f, paperOffsetYMm = 7f)
+        // Korrektur vom 2026-08-04: Der Rahmen ist eine Textbox, kein Blatt am Anschlag. Wer
+        // auf einer Grusskarte unten rechts schreiben will, braucht Groesse UND Position in
+        // derselben Vorlage - vorher war der Versatz global und im Serienmodus gar nicht
+        // einstellbar.
+        val eigene = vorgabe.copy(rahmenXMm = 5f, rahmenYMm = 7f)
         val s = eigene.mitVorlage(vorlage())
 
-        assertEquals(12f, s.paperOffsetXMm)
-        assertEquals(8f, s.paperOffsetYMm)
+        assertEquals(12f, s.rahmenXMm)
+        assertEquals(8f, s.rahmenYMm)
     }
 
     @Test
-    fun `eine neue Vorlage uebernimmt die globale Position als Ausgangspunkt`() {
-        // Die globalen Werte bleiben die Vorgabe - nur eben nicht mehr bindend.
-        val eigene = vorgabe.copy(paperOffsetXMm = 5f, paperOffsetYMm = 7f)
+    fun `das Blatt bleibt global und wandert nicht in die Vorlage`() {
+        // Zweite Korrektur vom 2026-08-04: Blatt und Textrahmen sind zwei Dinge. Das Blatt
+        // beschreibt das Papier auf dem Tisch - eine Vorlage darf es nicht mitbringen, sonst
+        // wechselt beim Oeffnen einer Vorlage stillschweigend das eingelegte Format.
+        val eigene = vorgabe.copy(paperWidthMm = 50f, paperHeightMm = 50f, paperOffsetXMm = 3f)
+        val s = eigene.mitVorlage(vorlage())
+
+        assertEquals(50f, s.paperWidthMm)
+        assertEquals(50f, s.paperHeightMm)
+        assertEquals(3f, s.paperOffsetXMm)
+    }
+
+    @Test
+    fun `eine neue Vorlage uebernimmt den aktuellen Rahmen als Ausgangspunkt`() {
+        val eigene = vorgabe.copy(rahmenXMm = 5f, rahmenYMm = 7f)
         val neu = neueVorlage(eigene, jetzt = 2000L)
 
-        assertEquals(5f, neu.paperOffsetXMm)
-        assertEquals(7f, neu.paperOffsetYMm)
+        assertEquals(5f, neu.rahmenXMm)
+        assertEquals(7f, neu.rahmenYMm)
     }
 
     @Test
@@ -94,8 +104,8 @@ class VorlageUmwandlungTest {
         assertEquals("10.0.0.9", frisch.host, "Die neue Maschinenadresse kam nicht an")
         assertEquals(900, frisch.feedDrawMmMin)
         // ... und der Rahmen der Vorlage hat das ueberlebt.
-        assertEquals(100f, frisch.paperWidthMm)
-        assertEquals(12f, frisch.paperOffsetXMm)
+        assertEquals(100f, frisch.rahmenBreiteMm)
+        assertEquals(12f, frisch.rahmenXMm)
     }
 
     @Test
@@ -122,13 +132,13 @@ class VorlageUmwandlungTest {
 
     @Test
     fun `eine neue Vorlage uebernimmt die aktuellen Einstellungen und ist sonst leer`() {
-        val eigene = vorgabe.copy(fontId = "serif", sizeMm = 9f, paperWidthMm = 120f)
+        val eigene = vorgabe.copy(fontId = "serif", sizeMm = 9f, rahmenBreiteMm = 120f)
         val neu = neueVorlage(eigene, jetzt = 2000L)
 
         assertEquals(0L, neu.id, "Eine neue Vorlage darf noch keine Kennung haben")
         assertEquals("serif", neu.fontId)
         assertEquals(9f, neu.sizeMm)
-        assertEquals(120f, neu.paperWidthMm)
+        assertEquals(120f, neu.rahmenBreiteMm)
         assertEquals("", neu.werte)
         assertEquals(2000L, neu.updatedAt)
     }

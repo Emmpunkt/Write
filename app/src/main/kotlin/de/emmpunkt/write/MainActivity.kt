@@ -142,6 +142,7 @@ fun WriteApp(viewModel: PlotterViewModel = viewModel()) {
                     onSettingsChange = viewModel::serieSettingsAendern,
                     onSettingsChangeLive = viewModel::serieSettingsLive,
                     onSettingsCommit = viewModel::serieSettingsCommit,
+                    onBlattChange = viewModel::updateSettings,
                     onStarten = viewModel::serieStarten,
                     onWeiter = viewModel::serieWeiter,
                     onUeberspringen = viewModel::serieUeberspringen,

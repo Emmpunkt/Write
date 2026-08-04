@@ -93,8 +93,12 @@ fun SettingsScreen(
         }
 
         HorizontalDivider()
-        Abschnitt("Papier")
-        Hinweis("Der Versatz beschreibt, wo die linke untere Blattecke am Anschlag liegt.")
+        Abschnitt("Blatt")
+        Hinweis(
+            "Das Papier, das auf dem Tisch liegt. Der Versatz beschreibt, wo seine linke " +
+                "untere Ecke am Anschlag sitzt. Wo der Text auf diesem Blatt steht, legt der " +
+                "Textrahmen fest – der steht im Editor und gehört zur jeweiligen Vorlage.",
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ZahlFeld("Versatz X (mm)", settings.paperOffsetXMm, Modifier.weight(1f)) { v ->
                 onChange { it.copy(paperOffsetXMm = v) }
@@ -114,6 +118,10 @@ fun SettingsScreen(
                 onChange { it.copy(marginMm = v) }
             }
         }
+        Hinweis(
+            "Der Rand wird nur von „Blatt füllen“ benutzt: damit springt der Textrahmen auf " +
+                "das ganze Blatt, um diesen Betrag eingerückt.",
+        )
 
         HorizontalDivider()
         Abschnitt("Schreibweise")

@@ -61,9 +61,16 @@ fun StilLeiste(
     onChangeLive: ((AppSettings) -> AppSettings) -> Unit,
     onCommit: () -> Unit,
     onAutoFit: () -> Unit,
+    /**
+     * Das Blatt ist global - es beschreibt das Papier auf dem Tisch, nicht das Dokument.
+     * Deshalb bekommt es einen eigenen Weg: Im Serie-Reiter geht [onChange] in die Vorlage,
+     * das Blattformat aber muss trotzdem in den Einstellungen landen.
+     */
+    onBlattChange: ((AppSettings) -> AppSettings) -> Unit = onChange,
 ) {
     // Reiner Bildschirmzustand: welche Regler zuletzt offen standen, muss nichts ueberdauern.
     var feintuningOffen by remember { mutableStateOf(false) }
+    var rahmenOffen by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -88,7 +95,7 @@ fun StilLeiste(
                 options = PaperPresets.all.map { it.name },
                 onSelect = { index ->
                     val p = PaperPresets.all[index]
-                    onChange { it.copy(paperWidthMm = p.widthMm, paperHeightMm = p.heightMm) }
+                    onBlattChange { it.copy(paperWidthMm = p.widthMm, paperHeightMm = p.heightMm) }
                 },
                 modifier = Modifier.weight(1f),
             )
@@ -122,6 +129,23 @@ fun StilLeiste(
                     Icon(icon, contentDescription = align.name)
                 }
             }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = { rahmenOffen = !rahmenOffen }) {
+                Text(if (rahmenOffen) "Textrahmen aus" else "Textrahmen…")
+            }
+            if (rahmenOffen) {
+                TextButton(onClick = { onChange { it.blattFuellen() } }) { Text("Blatt füllen") }
+            }
+        }
+
+        if (rahmenOffen) {
+            Rahmenfelder(settings, onChange)
         }
 
         Row(
@@ -188,6 +212,46 @@ fun StilLeiste(
                 onChangeLive = { v -> onChangeLive { s -> s.copy(slantDeg = v) } },
                 onCommit = onCommit,
             )
+        }
+    }
+}
+
+/**
+ * Groesse und Lage des Textkastens - auf dem Blatt, nicht auf dem Tisch.
+ *
+ * Standardmaessig eingeklappt: die vier Zahlen stellt man einmal ein und danach selten wieder,
+ * waehrend Schrift, Groesse und Ausrichtung staendig gebraucht werden. Ausgeklappt sind sie
+ * dieselben Felder wie fuer das Blatt unter Optionen - nur zaehlt der Versatz hier ab der
+ * linken unteren BLATTECKE.
+ *
+ * Im Editor wirken sie auf die globale Vorgabe, im Serie-Reiter auf die offene Vorlage. Das
+ * entscheidet der Aufrufer ueber `onChange`, nicht dieser Baustein.
+ */
+@Composable
+private fun Rahmenfelder(
+    settings: AppSettings,
+    onChange: ((AppSettings) -> AppSettings) -> Unit,
+) {
+    Text(
+        "Der Kasten, in den der Text gesetzt wird. Versatz ab der linken unteren Ecke des " +
+            "Blattes (${settings.paperWidthMm.fmt()} × ${settings.paperHeightMm.fmt()} mm).",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ZahlFeld("Breite (mm)", settings.rahmenBreiteMm, Modifier.weight(1f)) { v ->
+            onChange { it.copy(rahmenBreiteMm = v) }
+        }
+        ZahlFeld("Höhe (mm)", settings.rahmenHoeheMm, Modifier.weight(1f)) { v ->
+            onChange { it.copy(rahmenHoeheMm = v) }
+        }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ZahlFeld("Versatz X (mm)", settings.rahmenXMm, Modifier.weight(1f)) { v ->
+            onChange { it.copy(rahmenXMm = v) }
+        }
+        ZahlFeld("Versatz Y (mm)", settings.rahmenYMm, Modifier.weight(1f)) { v ->
+            onChange { it.copy(rahmenYMm = v) }
         }
     }
 }
