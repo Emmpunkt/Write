@@ -129,8 +129,6 @@ fun EditorScreen(
             ),
         )
 
-        Hinweise(document, settings)
-
         StilLeiste(
             settings = settings,
             textLeer = text.isBlank(),
@@ -142,6 +140,11 @@ fun EditorScreen(
             onCommit = onSettingsCommit,
             onAutoFit = onAutoFit,
         )
+
+        // Die Warnungen stehen UNTER der Stilleiste, nicht darueber. Oberhalb schoben sie den
+        // Groessenregler nach unten, sobald beim Ziehen eine Warnung auftauchte - der Regler
+        // wanderte unter dem Finger weg, und der Bildschirm flatterte zwischen zwei Zustaenden.
+        Hinweise(document, settings)
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -282,20 +285,23 @@ private fun SendeBereich(
             )
         }
 
+        // Links steht auf BEIDEN Reitern der direkte Weg, rechts der ueber die SD-Karte -
+        // sonst sitzt derselbe Knopf je nach Bildschirm woanders. Hervorgehoben ist der
+        // SD-Weg, weil er einen Verbindungsabriss ueberlebt.
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = onPlotViaSd,
-                enabled = bereit,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text("Auf SD senden")
-            }
             OutlinedButton(
                 onClick = onPlot,
                 enabled = bereit,
                 modifier = Modifier.weight(1f),
             ) {
                 Text("Direkt senden")
+            }
+            Button(
+                onClick = onPlotViaSd,
+                enabled = bereit,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Auf SD senden")
             }
             if (laeuft) {
                 OutlinedButton(onClick = onStop) { Text("Not-Halt") }

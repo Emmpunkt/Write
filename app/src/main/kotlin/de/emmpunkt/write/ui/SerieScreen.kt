@@ -242,12 +242,14 @@ private fun SerieStart(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Button(
+        // Dieselbe Anordnung wie im Editor: links der direkte Weg, rechts der ueber SD, und
+        // hervorgehoben ist der SD-Weg - er ueberlebt einen Verbindungsabriss.
+        OutlinedButton(
             onClick = { onStarten(false) },
             enabled = serie.startbar && machine.connected && !machine.busy,
             modifier = Modifier.weight(1f),
         ) { Text("Satz plotten") }
-        OutlinedButton(
+        Button(
             onClick = { onStarten(true) },
             enabled = serie.startbar && machine.connected && !machine.busy,
             modifier = Modifier.weight(1f),
