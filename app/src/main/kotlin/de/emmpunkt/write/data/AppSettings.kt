@@ -13,6 +13,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import de.emmpunkt.write.core.font.Fonts
 import de.emmpunkt.write.core.gcode.MachineProfile
 import de.emmpunkt.write.core.layout.Align
+import de.emmpunkt.write.core.layout.Drehung
 import de.emmpunkt.write.core.layout.Frame
 import de.emmpunkt.write.core.layout.Margins
 import de.emmpunkt.write.core.layout.TextStyle
@@ -59,6 +60,14 @@ data class AppSettings(
     val rahmenYMm: Float = 8f,
     val rahmenBreiteMm: Float = 132f,
     val rahmenHoeheMm: Float = 89f,
+    /**
+     * Wie der Text im Rahmen steht.
+     *
+     * Gehoert zum Rahmen, nicht zum Stil: Die Drehung betrifft die ganze Seite, nicht einzelne
+     * Absaetze. A6 hoch passt nicht auf den Tisch - hochkant schreibt man, indem man das Blatt
+     * quer legt und den Text dreht.
+     */
+    val drehung: Drehung = Drehung.GRAD_0,
 
     // Schrift. Schriftart, Groesse und Ausrichtung stehen NICHT mehr einzeln hier, sondern in
     // den Stilen - sonst gaebe es sie zweimal, einmal global und einmal je Stil. Was hier
@@ -308,6 +317,8 @@ class SettingsRepository(private val context: Context) {
             rahmenYMm = p[Keys.rahmenY] ?: defaults.rahmenYMm,
             rahmenBreiteMm = p[Keys.rahmenBreite] ?: defaults.rahmenBreiteMm,
             rahmenHoeheMm = p[Keys.rahmenHoehe] ?: defaults.rahmenHoeheMm,
+            drehung = p[Keys.drehung]?.let { runCatching { Drehung.valueOf(it) }.getOrNull() }
+                ?: defaults.drehung,
             // Fehlen die Stile, stammen die Einstellungen aus der Zeit davor: dann bildet das
             // damalige Schriftbild den Grundstil. Die Vorgabe waere hier falsch - wer in 12 mm
             // Zierschrift geschrieben hat, faende nach dem Update 7 mm Allure vor.
@@ -358,6 +369,7 @@ class SettingsRepository(private val context: Context) {
             p[Keys.rahmenY] = s.rahmenYMm
             p[Keys.rahmenBreite] = s.rahmenBreiteMm
             p[Keys.rahmenHoehe] = s.rahmenHoeheMm
+            p[Keys.drehung] = s.drehung.name
             p[Keys.stile] = stileAlsText(s.stile)
             p[Keys.lineSpacing] = s.lineSpacing
             p[Keys.letterSpacing] = s.letterSpacing
@@ -388,6 +400,7 @@ class SettingsRepository(private val context: Context) {
         val rahmenY = floatPreferencesKey("rahmen_y")
         val rahmenBreite = floatPreferencesKey("rahmen_breite")
         val rahmenHoehe = floatPreferencesKey("rahmen_hoehe")
+        val drehung = stringPreferencesKey("drehung")
         val stile = stringPreferencesKey("stile")
 
         // Nur noch zum LESEN: aus ihnen entsteht der Grundstil, wenn "stile" fehlt.

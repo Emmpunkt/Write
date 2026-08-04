@@ -3,6 +3,29 @@ package de.emmpunkt.write.core.layout
 /** Horizontale Ausrichtung einer Textzeile im Rahmen. */
 enum class Align { LEFT, CENTER, RIGHT }
 
+/**
+ * Wie der Text im Rahmen steht - in Vierteldrehungen gegen den Uhrzeigersinn.
+ *
+ * Der Anlass ist die Maschine: Ein A6-Blatt hoch (105 x 148 mm) passt nicht auf den Tisch
+ * (155 x 105 mm). Wer hochkant schreiben will, legt das Blatt quer und dreht den Text.
+ *
+ * Bewusst nur diese vier Stufen und kein freier Winkel: Das gedrehte Rechteck bleibt
+ * achsparallel, und damit bleibt die Frage "passt das noch aufs Blatt?" exakt beantwortbar.
+ *
+ * Gedreht wird der SATZ im Rahmen, nicht der Rahmen. Bei [GRAD_90] und [GRAD_270] wird deshalb
+ * auf einer Flaeche mit vertauschten Massen gesetzt und das Ergebnis hineingedreht.
+ */
+enum class Drehung(val grad: Int) {
+    GRAD_0(0),
+    GRAD_90(90),
+    GRAD_180(180),
+    GRAD_270(270),
+    ;
+
+    /** Ob Breite und Hoehe der Satzflaeche zu tauschen sind. */
+    val vertauscht: Boolean get() = this == GRAD_90 || this == GRAD_270
+}
+
 /** Raender des beschreibbaren Bereichs, in Millimetern. */
 data class Margins(
     val left: Float = 10f,

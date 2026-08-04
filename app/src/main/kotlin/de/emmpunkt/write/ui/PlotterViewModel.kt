@@ -351,6 +351,7 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
                 _zuordnung.value,
                 { Fonts.load(it) },
                 s.toFrame(),
+                drehung = s.drehung,
                 minMm = AppSettings.SCHRIFTGROESSE_MIN_MM,
                 maxMm = AppSettings.SCHRIFTGROESSE_MAX_MM,
             )
@@ -394,6 +395,7 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
             val laid = layoutAbsaetze(
                 absaetzeAus(_text.value, s.toTextStyles(), _zuordnung.value) { Fonts.load(it) },
                 s.toFrame(),
+                s.drehung,
             )
             val job = laid.toPlotJob(s.toMachineProfile().applying(maschinenwerte))
             DocumentState(
@@ -529,6 +531,7 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
                     zuordnung = s.zuordnung,
                     frame = s.settings.toFrame(),
                     schrift = { Fonts.load(it) },
+                    drehung = s.settings.drehung,
                 )
             }.getOrDefault(emptyList())
         }
@@ -545,6 +548,7 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
                             s.zuordnung,
                         ) { Fonts.load(it) },
                         s.settings.toFrame(),
+                        s.settings.drehung,
                     )
                 }.getOrNull()
             }
@@ -905,6 +909,7 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
             layoutAbsaetze(
                 absaetzeAus(text, s.toTextStyles(), zuordnung) { Fonts.load(it) },
                 s.toFrame(),
+                s.drehung,
             )
         }.getOrElse { return Result.failure(it) }
 

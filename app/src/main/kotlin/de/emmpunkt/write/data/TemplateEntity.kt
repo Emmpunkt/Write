@@ -46,4 +46,6 @@ data class TemplateEntity(
     val rahmenYMm: Float,
     val rahmenBreiteMm: Float,
     val rahmenHoeheMm: Float,
+    /** Wie der Text im Rahmen steht - Name des Enums, wie bei der Ausrichtung. */
+    val drehung: String,
 )

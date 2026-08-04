@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import de.emmpunkt.write.core.font.Fonts
 import de.emmpunkt.write.core.layout.Align
+import de.emmpunkt.write.core.layout.Drehung
 import de.emmpunkt.write.data.Absatzstil
 import de.emmpunkt.write.data.AppSettings
 import de.emmpunkt.write.data.PaperPresets
@@ -408,6 +409,24 @@ private fun Rahmenfelder(
         }
         ZahlFeld("Versatz Y (mm)", settings.rahmenYMm, Modifier.weight(1f)) { v ->
             onChange { it.copy(rahmenYMm = v) }
+        }
+    }
+
+    Text(
+        "Drehung – für hochkant beschriebene Blätter. Ein A6 hoch passt nicht auf den Tisch; " +
+            "man legt es quer und dreht den Text.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        Drehung.entries.forEachIndexed { index, drehung ->
+            SegmentedButton(
+                selected = settings.drehung == drehung,
+                onClick = { onChange { it.copy(drehung = drehung) } },
+                shape = SegmentedButtonDefaults.itemShape(index, Drehung.entries.size),
+            ) {
+                Text("${drehung.grad}°")
+            }
         }
     }
 }

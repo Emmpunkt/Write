@@ -8,6 +8,7 @@ import de.emmpunkt.write.core.layout.Frame
 import de.emmpunkt.write.core.layout.Margins
 import de.emmpunkt.write.core.layout.TextStyle
 import de.emmpunkt.write.core.layout.AbsatzSatz
+import de.emmpunkt.write.core.layout.Drehung
 import de.emmpunkt.write.core.layout.fitSize
 import de.emmpunkt.write.core.layout.layoutAbsaetze
 import java.io.File
@@ -45,8 +46,9 @@ class PreviewSamplesTest {
         absaetze: List<AbsatzSatz>,
         frame: Frame,
         showTravel: Boolean = false,
+        drehung: Drehung = Drehung.GRAD_0,
     ): File {
-        val laid = layoutAbsaetze(absaetze, frame)
+        val laid = layoutAbsaetze(absaetze, frame, drehung)
         val job = laid.toPlotJob(profile)
         val target = File(outDir, "$name.png")
         GCodeRenderer.renderPng(
@@ -171,6 +173,20 @@ class PreviewSamplesTest {
             ),
             a6quer,
         )
+
+        // Hochkant auf quer liegendem Blatt: der Fall, fuer den die Drehung gebaut wurde.
+        // A6 hoch passt nicht auf den Tisch - also Blatt quer legen und den Text drehen.
+        val einladung = listOf(
+            AbsatzSatz("Einladung", TextStyle("allure", sizeMm = 10f, align = Align.CENTER), Fonts.load("allure")),
+            AbsatzSatz("", TextStyle("sans", sizeMm = 4f), Fonts.load("sans")),
+            AbsatzSatz(
+                "Wir feiern am Samstag ab 18 Uhr im Garten.",
+                TextStyle("sans", sizeMm = 4f), Fonts.load("sans"),
+            ),
+        )
+        Drehung.entries.forEach { drehung ->
+            rendereAbsaetze("21-drehung-${drehung.grad}", einladung, a6quer, drehung = drehung)
+        }
 
         val erzeugt = outDir.listFiles { f: File -> f.extension == "png" }?.size ?: 0
         assertTrue(erzeugt >= 30, "Es wurden nur $erzeugt Musterbilder erzeugt")

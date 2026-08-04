@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [NoteEntity::class, TemplateEntity::class], version = 5, exportSchema = false)
+@Database(entities = [NoteEntity::class, TemplateEntity::class], version = 6, exportSchema = false)
 abstract class NoteDatabase : RoomDatabase() {
 
     abstract fun notes(): RoomNoteDao
@@ -205,6 +205,20 @@ abstract class NoteDatabase : RoomDatabase() {
         }
 
         /**
+         * Version 5 -> 6: Die Vorlage merkt sich, wie der Text im Rahmen steht.
+         *
+         * Nur eine Spalte dazu, also kein Tabellenneubau noetig. Vorhandene Vorlagen stehen
+         * aufrecht - das war bisher die einzige Moeglichkeit und bleibt damit unveraendert.
+         */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `templates` ADD COLUMN `drehung` TEXT NOT NULL DEFAULT 'GRAD_0'",
+                )
+            }
+        }
+
+        /**
          * Eine Datenbank fuer die ganze App.
          *
          * Room haelt Verbindungen und einen Zwischenspeicher; zwei Instanzen auf derselben
@@ -215,7 +229,9 @@ abstract class NoteDatabase : RoomDatabase() {
                 context.applicationContext,
                 NoteDatabase::class.java,
                 "write_notes.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            ).addMigrations(
+                MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+            )
                 .build().also { instanz = it }
         }
     }

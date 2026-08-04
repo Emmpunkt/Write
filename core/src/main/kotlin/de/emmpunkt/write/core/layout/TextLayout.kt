@@ -2,6 +2,7 @@ package de.emmpunkt.write.core.layout
 
 import de.emmpunkt.write.core.font.StrokeFont
 import de.emmpunkt.write.core.font.unsupportedCharacters
+import de.emmpunkt.write.core.geometry.Point
 import de.emmpunkt.write.core.geometry.Polyline
 
 /** Eine gesetzte Zeile. [baselineYMm] ist der Abstand der Grundlinie zur Blattunterkante. */
@@ -79,7 +80,67 @@ fun layoutText(
  * bewusste Grenze: alles Feinere braeuchte Textauswahl, Formatspuren im Editor und ein
  * zeichengenaues Speicherformat.
  */
-fun layoutAbsaetze(absaetze: List<AbsatzSatz>, frame: Frame): LaidOutText {
+fun layoutAbsaetze(
+    absaetze: List<AbsatzSatz>,
+    frame: Frame,
+    drehung: Drehung = Drehung.GRAD_0,
+): LaidOutText {
+    // Gesetzt wird immer aufrecht - nur eben bei 90/270 Grad auf einer Flaeche mit vertauschten
+    // Massen. Erst ganz am Ende kippt das Ergebnis in den Rahmen. Dadurch braucht der ganze
+    // Umbruch, die Ausrichtung und die Einlauf-Korrektur von der Drehung nichts zu wissen.
+    val satzflaeche = satzflaecheFuer(frame, drehung)
+    val laid = layoutAufrecht(absaetze, satzflaeche)
+    return if (drehung == Drehung.GRAD_0) laid else laid.gedreht(drehung, frame)
+}
+
+/** Der Rahmen, in dem tatsaechlich gesetzt wird - bei 90/270 Grad hochkant gestellt. */
+private fun satzflaecheFuer(frame: Frame, drehung: Drehung): Frame {
+    val m = frame.margins
+    return when (drehung) {
+        Drehung.GRAD_0 -> frame
+        // Was im Ergebnis unten liegt, ist beim Setzen links: die Raender wandern mit.
+        Drehung.GRAD_90 -> Frame(
+            widthMm = frame.heightMm,
+            heightMm = frame.widthMm,
+            margins = Margins(left = m.bottom, top = m.left, right = m.top, bottom = m.right),
+        )
+        Drehung.GRAD_180 -> Frame(
+            widthMm = frame.widthMm,
+            heightMm = frame.heightMm,
+            margins = Margins(left = m.right, top = m.bottom, right = m.left, bottom = m.top),
+        )
+        Drehung.GRAD_270 -> Frame(
+            widthMm = frame.heightMm,
+            heightMm = frame.widthMm,
+            margins = Margins(left = m.top, top = m.right, right = m.bottom, bottom = m.left),
+        )
+    }
+}
+
+/**
+ * Kippt einen fertigen Satz in den Rahmen.
+ *
+ * [ziel] ist der Rahmen in seinen echten Massen; der Satz liegt in denen der Satzflaeche vor.
+ * Die Zeilen behalten ihre Reihenfolge und ihren Text - nur ihre Punkte wandern. Die
+ * Grundlinie hat nach einer Vierteldrehung keine sinnvolle Entsprechung mehr in
+ * Blattkoordinaten und bleibt deshalb stehen; sie wird nur innerhalb des Satzes gebraucht.
+ */
+private fun LaidOutText.gedreht(drehung: Drehung, ziel: Frame): LaidOutText {
+    val b = ziel.widthMm
+    val h = ziel.heightMm
+    val kippen: (Point) -> Point = when (drehung) {
+        Drehung.GRAD_0 -> return this
+        Drehung.GRAD_90 -> { p -> Point(b - p.y, p.x) }
+        Drehung.GRAD_180 -> { p -> Point(b - p.x, h - p.y) }
+        Drehung.GRAD_270 -> { p -> Point(p.y, h - p.x) }
+    }
+    return copy(
+        lines = lines.map { it.copy(strokes = it.strokes.map { zug -> zug.map(kippen) }) },
+        strokes = strokes.map { it.map(kippen) },
+    )
+}
+
+private fun layoutAufrecht(absaetze: List<AbsatzSatz>, frame: Frame): LaidOutText {
     val usableWidth = frame.usableWidthMm
     val overlong = LinkedHashSet<String>()
     val unsupported = LinkedHashSet<Int>()

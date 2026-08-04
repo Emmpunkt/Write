@@ -1,6 +1,7 @@
 package de.emmpunkt.write.data
 
 import de.emmpunkt.write.core.font.StrokeFont
+import de.emmpunkt.write.core.layout.Drehung
 import de.emmpunkt.write.core.layout.Frame
 import de.emmpunkt.write.core.layout.TextStyle
 import de.emmpunkt.write.core.layout.absaetzeAus
@@ -43,9 +44,10 @@ fun pruefeBogen(
     zuordnung: List<Int>,
     frame: Frame,
     schrift: (String) -> StrokeFont,
+    drehung: Drehung = Drehung.GRAD_0,
 ): List<BogenBefund> = zeilen.mapIndexed { index, zeile ->
     val text = einsetzen(vorlage, zeile.felder)
-    val laid = layoutAbsaetze(absaetzeAus(text, stile, zuordnung, schrift), frame)
+    val laid = layoutAbsaetze(absaetzeAus(text, stile, zuordnung, schrift), frame, drehung)
     BogenBefund(
         index = index,
         bezeichnung = zeile.bezeichnung,

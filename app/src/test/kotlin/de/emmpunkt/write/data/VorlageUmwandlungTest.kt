@@ -1,6 +1,7 @@
 package de.emmpunkt.write.data
 
 import de.emmpunkt.write.core.layout.Align
+import de.emmpunkt.write.core.layout.Drehung
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -24,6 +25,7 @@ class VorlageUmwandlungTest {
         rahmenYMm = 8f,
         rahmenBreiteMm = 100f,
         rahmenHoeheMm = 70f,
+        drehung = Drehung.GRAD_0.name,
     )
 
     @Test
@@ -112,6 +114,18 @@ class VorlageUmwandlungTest {
         val kaputt = vorlage().copy(stile = "Text|serif|11.0|SCHRAEG_VON_UNTEN")
 
         assertEquals(Align.LEFT, vorgabe.mitVorlage(kaputt).stile.single().align)
+    }
+
+    @Test
+    fun `die Drehung wandert mit der Vorlage`() {
+        val hochkant = vorlage().copy(drehung = Drehung.GRAD_90.name)
+        assertEquals(Drehung.GRAD_90, vorgabe.mitVorlage(hochkant).drehung)
+    }
+
+    @Test
+    fun `eine unbekannte Drehung faellt auf aufrecht zurueck`() {
+        val kaputt = vorlage().copy(drehung = "KOPFUEBER")
+        assertEquals(Drehung.GRAD_0, vorgabe.mitVorlage(kaputt).drehung)
     }
 
     @Test

@@ -130,6 +130,7 @@ fun fitSkalierung(
     zuordnung: List<Int>,
     schrift: (String) -> StrokeFont,
     frame: Frame,
+    drehung: Drehung = Drehung.GRAD_0,
     minMm: Float = 2f,
     maxMm: Float = 25f,
     stepMm: Float = 0.1f,
@@ -155,6 +156,7 @@ fun fitSkalierung(
         val laid = layoutAbsaetze(
             absaetzeAus(text, skaliert(stile, groesse(stufe), stepMm), zuordnung, schrift),
             frame,
+            drehung,
         )
         return !laid.overflow && laid.overlongWords.isEmpty()
     }

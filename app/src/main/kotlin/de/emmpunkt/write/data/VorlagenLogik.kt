@@ -1,6 +1,7 @@
 package de.emmpunkt.write.data
 
 import de.emmpunkt.write.core.layout.Align
+import de.emmpunkt.write.core.layout.Drehung
 
 /**
  * Trennzeichen der Werteliste.
@@ -132,6 +133,7 @@ fun AppSettings.mitVorlage(v: TemplateEntity): AppSettings = copy(
     rahmenYMm = v.rahmenYMm,
     rahmenBreiteMm = v.rahmenBreiteMm,
     rahmenHoeheMm = v.rahmenHoeheMm,
+    drehung = runCatching { Drehung.valueOf(v.drehung) }.getOrDefault(Drehung.GRAD_0),
 )
 
 /** Der umgekehrte Weg: aus dem Arbeitszustand wird wieder eine Vorlage zum Speichern. */
@@ -158,6 +160,7 @@ fun AppSettings.zuVorlage(
     rahmenYMm = rahmenYMm,
     rahmenBreiteMm = rahmenBreiteMm,
     rahmenHoeheMm = rahmenHoeheMm,
+    drehung = drehung.name,
 )
 
 /**
