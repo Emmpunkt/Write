@@ -13,9 +13,9 @@ import de.emmpunkt.write.core.gcode.toPlotJob
 import de.emmpunkt.write.core.geometry.Polyline
 import de.emmpunkt.write.core.layout.LaidOutText
 import de.emmpunkt.write.core.layout.absaetzeAus
-import de.emmpunkt.write.core.layout.fitSkalierung
+import de.emmpunkt.write.core.layout.benutzteStile
+import de.emmpunkt.write.core.layout.fitEinzelstil
 import de.emmpunkt.write.core.layout.layoutAbsaetze
-import de.emmpunkt.write.core.layout.skaliert
 import java.util.Locale
 import de.emmpunkt.write.data.AppSettings
 import de.emmpunkt.write.data.BogenBefund
@@ -354,11 +354,27 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
         if (text.isBlank()) return
 
         val s = _settings.value
+        val stil = stilIndex.value
+
+        // Ein Stil, der keinem Absatz zugewiesen ist, steht nicht auf dem Blatt - fuer ihn gibt
+        // es nichts einzupassen. Das ehrlich zu melden ist besser, als den Regler auf das
+        // Maximum springen zu lassen, weil jede Groesse "passt".
+        if (stil !in benutzteStile(text, _zuordnung.value, s.stile.size)) {
+            _machine.update {
+                it.copy(
+                    message = "„${s.stile[stil].name}“ kommt im Text nicht vor – " +
+                        "erst einem Absatz zuweisen.",
+                )
+            }
+            return
+        }
+
         val ergebnis = runCatching {
-            fitSkalierung(
+            fitEinzelstil(
                 text,
                 s.toTextStyles(),
                 _zuordnung.value,
+                stil,
                 { Fonts.load(it) },
                 s.toFrame(),
                 drehung = s.drehung,
@@ -381,15 +397,9 @@ class PlotterViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
 
-        // Alle Stile wandern gemeinsam: Was doppelt so gross war, bleibt doppelt so gross.
-        val neueGroessen = skaliert(s.toTextStyles(), ergebnis.sizeMm).map { it.sizeMm }
-        updateSettings { alt ->
-            alt.copy(
-                stile = alt.stile.mapIndexed { i, stil ->
-                    stil.copy(sizeMm = neueGroessen.getOrElse(i) { stil.sizeMm })
-                },
-            )
-        }
+        // NUR der gewaehlte Stil wandert. Die uebrigen anzufassen hat den Nutzer ueberrascht:
+        // Ein unbenutzter Stil wuchs beim Einpassen um denselben Faktor mit.
+        updateSettings { alt -> alt.mitStil(stil) { it.copy(sizeMm = ergebnis.sizeMm) } }
     }
 
     /**

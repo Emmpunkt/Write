@@ -416,10 +416,19 @@ Zwei Dinge, die beim Bauen nicht offensichtlich waren:
    eingefügten Absatz alles. Verglichen wird gemeinsames Präfix und Suffix; neue Absätze erben
    den Stil des Absatzes davor, was den häufigsten Fall (Eingabetaste mitten im Text) trifft.
 
-**Einpassen** skaliert seit Teil 4 alle Stile gemeinsam (`fitSkalierung`): gesucht wird die
-Größe von Stil 1 auf demselben 0,1-mm-Raster, die übrigen wandern proportional mit. Der
-Suchbereich ist so eingeengt, dass **jeder** Stil im Reglerbereich bleibt — sonst lieferte das
-Einpassen bei doppelt so großer Überschrift eine Größe, die der Regler nicht darstellen kann.
+**Einpassen wirkt auf den GEWÄHLTEN Stil** (`fitEinzelstil`) — den, der gerade in der Leiste
+steht. Alle übrigen bleiben unangetastet, auch beim Prüfen.
+
+Der erste Entwurf skalierte alle Stile mit einem gemeinsamen Faktor, gemessen an Stil 1. **Vom
+Nutzer am Gerät gefunden (2026-08-04):** Er ließ „Stil 2" einpassen, und der Stil „Text" sprang
+von 11,6 auf 15,9 mm — obwohl er keinem Absatz zugewiesen war und damit gar nicht auf dem Blatt
+stand. Zwei Fehler in einem: Ein unbenutzter Stil wuchs mit, **und** der größte Stil begrenzte
+die Suche nach oben, auch wenn er unbenutzt war.
+
+Ein Stil, der keinem Absatz zugewiesen ist, hat beim Einpassen nichts mitzureden — dafür gibt
+es `benutzteStile()`, das über dieselbe Index-Auflösung zählt wie `absaetzeAus()`. Ist der
+gewählte Stil unbenutzt, sagt die App das, statt den Regler ans Maximum springen zu lassen
+(dort „passt" jede Größe, weil sie nichts ändert).
 
 **Speicherformat** (kein JSON-Lib im Projekt): Stile als eine Zeile je Stil mit `|` als
 Feldtrenner, Zuordnung als Komma-Liste von Indizes. Ein unlesbarer Zuordnungseintrag wird zu 0,

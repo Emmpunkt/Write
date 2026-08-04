@@ -85,49 +85,21 @@ fun fitSize(
 }
 
 /**
- * Skaliert alle [stile] so, dass der erste - der Leitstil - [leitgroesseMm] misst.
+ * Sucht die groesste Groesse fuer EINEN Stil, bei der der ganze Text noch in den [frame] passt.
  *
- * Die uebrigen wandern proportional mit: Was doppelt so gross war, bleibt doppelt so gross.
- * Gerastert wird auf [stepMm], damit sich jede entstandene Groesse hinterher auch von Hand
- * wieder einstellen laesst; der Leitstil bekommt sein Mass unveraendert, weil die Suche es
- * bereits auf dem Raster gefunden hat.
+ * Alle uebrigen Stile bleiben, wie sie sind - auch beim Pruefen. Das ist der Unterschied zum
+ * ersten Entwurf, der alle Stile mit einem gemeinsamen Faktor skalierte: Dabei wuchs ein Stil
+ * mit, der im Text gar nicht vorkam (vom Nutzer am Geraet gefunden, 2026-08-04), und der
+ * groesste Stil begrenzte die Suche, auch wenn er unbenutzt war.
+ *
+ * Gesucht wird auf demselben Raster wie in [fitSize]; bei nur einem Stil ist das Ergebnis
+ * deshalb bitgenau dasselbe.
  */
-fun skaliert(
-    stile: List<TextStyle>,
-    leitgroesseMm: Float,
-    stepMm: Float = 0.1f,
-): List<TextStyle> {
-    require(stile.isNotEmpty()) { "Es braucht mindestens einen Stil" }
-    val faktor = leitgroesseMm / stile.first().sizeMm
-    return stile.mapIndexed { index, stil ->
-        if (index == 0) {
-            stil.copy(sizeMm = leitgroesseMm)
-        } else {
-            stil.copy(sizeMm = aufRaster(stil.sizeMm * faktor, stepMm))
-        }
-    }
-}
-
-/**
- * Sucht den groessten gemeinsamen Massstab, bei dem [text] mit allen [stile]n in den [frame]
- * passt.
- *
- * Gesucht wird ueber die Groesse des Leitstils auf demselben 0,1-mm-Raster wie in [fitSize];
- * die uebrigen Stile skalieren mit. Bei nur einem Stil ist das Ergebnis deshalb bitgenau das
- * von [fitSize].
- *
- * Der Suchbereich ist enger als [minMm] .. [maxMm]: Er ist so gewaehlt, dass **jeder** Stil im
- * Bereich des Reglers bleibt. Sonst lieferte das Einpassen bei einer doppelt so grossen
- * Ueberschrift eine Groesse, die der Regler gar nicht mehr darstellen kann - genau der Fehler,
- * der den Reglerknopf schon einmal am Anschlag kleben liess.
- *
- * Liegen die Stile so weit auseinander, dass kein Faktor alle unterbringt, ist das Ergebnis
- * [FitResult.fits] = false. Die App darf dann nichts setzen, sondern muss es sagen.
- */
-fun fitSkalierung(
+fun fitEinzelstil(
     text: String,
     stile: List<TextStyle>,
     zuordnung: List<Int>,
+    stilIndex: Int,
     schrift: (String) -> StrokeFont,
     frame: Frame,
     drehung: Drehung = Drehung.GRAD_0,
@@ -136,28 +108,23 @@ fun fitSkalierung(
     stepMm: Float = 0.1f,
 ): FitResult {
     require(stile.isNotEmpty()) { "Es braucht mindestens einen Stil" }
+    require(stilIndex in stile.indices) { "Diesen Stil gibt es nicht: $stilIndex" }
     require(minMm > 0f) { "Mindestgroesse muss positiv sein" }
     require(maxMm >= minMm) { "Obergrenze liegt unter der Untergrenze" }
     require(stepMm > 0f) { "Schrittweite muss positiv sein" }
 
     fun groesse(stufe: Int): Float = (stufe.toDouble() * stepMm.toDouble()).toFloat()
 
-    val leit = stile.first().sizeMm
-    val kleinster = stile.minOf { it.sizeMm }
-    val groesster = stile.maxOf { it.sizeMm }
-
-    val unterste = ceil(leit * (minMm / kleinster) / stepMm - RASTER_TOLERANZ).toInt()
-    val oberste = floor(leit * (maxMm / groesster) / stepMm + RASTER_TOLERANZ).toInt()
+    val unterste = ceil(minMm / stepMm - RASTER_TOLERANZ).toInt()
+    val oberste = floor(maxMm / stepMm + RASTER_TOLERANZ).toInt()
     if (unterste > oberste) return FitResult(groesse(unterste), fits = false)
-
     if (text.isBlank()) return FitResult(groesse(oberste), fits = true)
 
     fun passt(stufe: Int): Boolean {
-        val laid = layoutAbsaetze(
-            absaetzeAus(text, skaliert(stile, groesse(stufe), stepMm), zuordnung, schrift),
-            frame,
-            drehung,
-        )
+        val probe = stile.mapIndexed { i, stil ->
+            if (i == stilIndex) stil.copy(sizeMm = groesse(stufe)) else stil
+        }
+        val laid = layoutAbsaetze(absaetzeAus(text, probe, zuordnung, schrift), frame, drehung)
         return !laid.overflow && laid.overlongWords.isEmpty()
     }
 
@@ -173,10 +140,6 @@ fun fitSkalierung(
     }
     return FitResult(groesse(unten), fits = true)
 }
-
-/** Rundet auf ein Vielfaches von [stepMm], aber nie auf null - das waere keine Schrift mehr. */
-private fun aufRaster(mm: Float, stepMm: Float): Float =
-    maxOf(stepMm, (Math.round(mm / stepMm).toDouble() * stepMm.toDouble()).toFloat())
 
 /** Fuer den Fall, dass minMm/stepMm rechnerisch knapp neben einer ganzen Stufe landet. */
 private const val RASTER_TOLERANZ = 1e-4

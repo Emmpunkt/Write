@@ -224,9 +224,29 @@ fun absaetzeAus(
 ): List<AbsatzSatz> {
     require(stile.isNotEmpty()) { "Es braucht mindestens einen Stil" }
     return text.split('\n').mapIndexed { index, absatz ->
-        val stil = stile.getOrNull(zuordnung.getOrNull(index) ?: 0) ?: stile.first()
+        val stil = stile[stilFuer(zuordnung, index, stile.size)]
         AbsatzSatz(absatz, stil, schrift(stil.fontId))
     }
+}
+
+/**
+ * Welche Stile im Text tatsaechlich vorkommen.
+ *
+ * Wird gebraucht, um Stile zu erkennen, die zwar angelegt, aber keinem Absatz zugewiesen sind:
+ * Beim Einpassen haben sie nichts mitzureden - sie stehen ja nicht auf dem Blatt.
+ *
+ * Zaehlt ueber dieselbe Aufloesung wie [absaetzeAus]; ein zweiter Weg wuerde frueher oder
+ * spaeter etwas anderes zaehlen, als gesetzt wird.
+ */
+fun benutzteStile(text: String, zuordnung: List<Int>, anzahlStile: Int): Set<Int> {
+    require(anzahlStile > 0) { "Es braucht mindestens einen Stil" }
+    return text.split('\n').indices.map { stilFuer(zuordnung, it, anzahlStile) }.toSet()
+}
+
+/** Der Stil-Index eines Absatzes - fehlende und unbekannte Eintraege werden zum ersten Stil. */
+private fun stilFuer(zuordnung: List<Int>, absatz: Int, anzahlStile: Int): Int {
+    val i = zuordnung.getOrNull(absatz) ?: 0
+    return if (i in 0 until anzahlStile) i else 0
 }
 
 /** Eine umbrochene Zeile mit dem Schriftbild, in dem sie gesetzt wird. */
