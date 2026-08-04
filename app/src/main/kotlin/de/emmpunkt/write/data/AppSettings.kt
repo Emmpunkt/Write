@@ -20,6 +20,7 @@ import de.emmpunkt.write.core.layout.Drehung
 import de.emmpunkt.write.core.layout.Frame
 import de.emmpunkt.write.core.layout.Margins
 import de.emmpunkt.write.core.geometry.Polyline
+import de.emmpunkt.write.core.geometry.boundingBox
 import de.emmpunkt.write.core.layout.TextStyle
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -250,11 +251,14 @@ data class AppSettings(
      */
     val zierrahmenPasstAufsBlatt: Boolean
         get() {
-            if (rahmenForm == RahmenForm.KEINER) return true
-            val a = rahmenAbstandMm.coerceAtLeast(0f)
-            return rahmenXMm - a >= -0.01f && rahmenYMm - a >= -0.01f &&
-                rahmenXMm + rahmenBreiteMm + a <= paperWidthMm + 0.01f &&
-                rahmenYMm + rahmenHoeheMm + a <= paperHeightMm + 0.01f
+            // Gemessen an den ERZEUGTEN Zuegen, nicht nachgerechnet: Der Zipfel der
+            // Sprechblase haengt aussen an, und jede kuenftige Form darf das ebenso. Eine
+            // zweite Rechnung neben `rahmenZuege` liefe frueher oder spaeter auseinander -
+            // genau daran ist diese Pruefung schon einmal vorbeigelaufen.
+            val box = zierrahmenZuege().boundingBox() ?: return true
+            return rahmenXMm + box.minX >= -0.01f && rahmenYMm + box.minY >= -0.01f &&
+                rahmenXMm + box.maxX <= paperWidthMm + 0.01f &&
+                rahmenYMm + box.maxY <= paperHeightMm + 0.01f
         }
 
     /** Blatt und Rahmen, wie die Vorschau sie braucht. */

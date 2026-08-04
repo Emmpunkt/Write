@@ -485,9 +485,32 @@ Was beim Bauen nicht offensichtlich war:
 
 Room **6 → 7** (drei Spalten, kein Tabellenumbau). Vorhandene Vorlagen bekommen keinen Rahmen.
 
-**Am Gerät geprüft (2026-08-04):** Migrationen liefen, Sprechblase umschließt den Textrahmen mit
-Abstand, Zipfelseite wählbar, Kennzahlen enthalten den Rahmen. Danach wieder auf „kein Rahmen"
-gestellt. **Noch nicht an der Maschine gefahren.**
+**Am Gerät geprüft (2026-08-04):** Migrationen liefen, Zipfelseite wählbar, Kennzahlen enthalten
+den Rahmen. **Noch nicht an der Maschine gefahren.**
+
+### Vom Nutzer gefunden: die Sprechblase fraß ihren eigenen Kasten auf
+
+Der erste Wurf war falsch, und zwar an einer Stelle, die alle Tests grün ließ. `sprechblase()`
+schnitt den Streifen für den Zipfel **aus dem bestellten Kasten heraus** und machte den
+umschließenden Teil entsprechend kleiner. `zierrahmenZuege()` übergibt aber „Textrahmen +
+2 × Abstand" in der Annahme, dass genau das umschlossen wird. Bei Zipfel links/rechts fehlten
+dadurch rund 10 mm Breite — beim Nutzer standen 6,4 mm Text neben der Blase.
+
+**Die Regel lautet jetzt: Die Maße von `rahmenZuege` beschreiben die eingeschlossene Fläche,
+nicht die Außenkante.** Was eine Form darüber hinaus braucht, hängt außen an.
+
+Zwei Folgen, die wichtiger sind als der Fix selbst:
+
+- **`zierrahmenPasstAufsBlatt` misst jetzt die ERZEUGTEN Züge** statt selbst nachzurechnen.
+  Die alte Fassung rechnete den Platzbedarf ein zweites Mal nach — und lief genau an diesem
+  Fehler vorbei, weil beide Rechnungen dieselbe falsche Annahme teilten.
+- Ein Test prüft für **jede** Form und jede Zipfelseite, dass die Kantenmitten des bestellten
+  Kastens wirklich umschlossen sind (Punkt-in-Polygon). Geprüft werden die Kantenmitten und
+  nicht die Ecken: Bei eingezogenen oder abgerundeten Ecken liegt die Ecke bauartbedingt frei,
+  eine ganze Kante aber nie.
+
+**Merksatz:** Wenn eine Funktion Maße entgegennimmt, muss feststehen, ob sie den Inhalt oder die
+Hülle beschreiben — und die Platzprüfung darf das nicht ein zweites Mal raten.
 
 ## Bekannte offene Punkte
 

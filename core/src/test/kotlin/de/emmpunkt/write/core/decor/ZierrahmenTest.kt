@@ -1,5 +1,6 @@
 package de.emmpunkt.write.core.decor
 
+import de.emmpunkt.write.core.geometry.Point
 import de.emmpunkt.write.core.geometry.boundingBox
 import kotlin.math.abs
 import kotlin.test.Test
@@ -26,16 +27,20 @@ class ZierrahmenTest {
     }
 
     @Test
-    fun `jede Form bleibt innerhalb ihrer Masse`() {
-        RahmenForm.entries.filter { it != RahmenForm.KEINER }.forEach { form ->
-            val box = zuege(form).boundingBox()
-                ?: error("$form hat gar nichts gezeichnet")
-            assertTrue(
-                box.minX >= -0.01f && box.minY >= -0.01f &&
-                    box.maxX <= breite + 0.01f && box.maxY <= hoehe + 0.01f,
-                "$form ragt heraus: $box",
-            )
-        }
+    fun `die geschlossenen Formen bleiben innerhalb ihrer Masse`() {
+        // Die Sprechblase ist bewusst ausgenommen: ihr Zipfel haengt aussen an. Dass er den
+        // bestellten Kasten NICHT auffrisst, prueft `der Zipfel haengt aussen an`.
+        RahmenForm.entries
+            .filter { it != RahmenForm.KEINER && it != RahmenForm.SPRECHBLASE }
+            .forEach { form ->
+                val box = zuege(form).boundingBox()
+                    ?: error("$form hat gar nichts gezeichnet")
+                assertTrue(
+                    box.minX >= -0.01f && box.minY >= -0.01f &&
+                        box.maxX <= breite + 0.01f && box.maxY <= hoehe + 0.01f,
+                    "$form ragt heraus: $box",
+                )
+            }
     }
 
     @Test
@@ -131,6 +136,67 @@ class ZierrahmenTest {
             klein.width < gross.width - 0.01f,
             "Bei halber Hoehe muesste die Zier kleiner werden: $klein gegen $gross",
         )
+    }
+
+    @Test
+    fun `jede Form umschliesst den bestellten Kasten wirklich`() {
+        // Am Geraet gefunden (2026-08-04): Die Sprechblase schnitt den Streifen fuer den Zipfel
+        // aus dem BESTELLTEN Kasten heraus, statt ihn nach aussen anzuhaengen. Der umschliessende
+        // Teil war dadurch bei Zipfel links/rechts rund 10 mm schmaler als bestellt - der Text
+        // stand sichtbar neben der Blase.
+        //
+        // Geprueft werden die Kantenmitten, nicht die Ecken: Bei eingezogenen oder abgerundeten
+        // Ecken liegt die Ecke selbst bauartbedingt frei, eine ganze Kante aber nie.
+        val b = 58f
+        val h = 58f
+        val proben = listOf(
+            Point(b / 2f, 0.5f), Point(b / 2f, h - 0.5f),
+            Point(0.5f, h / 2f), Point(b - 0.5f, h / 2f),
+            Point(b / 2f, h / 2f),
+        )
+
+        RahmenForm.entries.filter { it != RahmenForm.KEINER }.forEach { form ->
+            Zipfelseite.entries.forEach { seite ->
+                val zuege = rahmenZuege(form, b, h, seite)
+                proben.forEach { p ->
+                    assertTrue(
+                        zuege.any { liegtInnerhalb(p, it) },
+                        "$form ($seite) umschliesst $p nicht",
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `der Zipfel haengt aussen an und frisst den Kasten nicht auf`() {
+        val b = 58f
+        val h = 58f
+        Zipfelseite.entries.forEach { seite ->
+            val zuege = rahmenZuege(RahmenForm.SPRECHBLASE, b, h, seite)
+            val box = zuege.boundingBox()!!
+            // Der bestellte Kasten liegt vollstaendig drin; der Zipfel ragt darueber hinaus.
+            assertTrue(box.minX <= 0.01f && box.minY <= 0.01f, "$seite: $box beginnt zu spaet")
+            assertTrue(
+                box.maxX >= b - 0.01f && box.maxY >= h - 0.01f,
+                "$seite: $box endet zu frueh",
+            )
+        }
+    }
+
+    /** Ray-Casting: liegt [p] innerhalb des geschlossenen Zuges? */
+    private fun liegtInnerhalb(p: Point, zug: de.emmpunkt.write.core.geometry.Polyline): Boolean {
+        var drin = false
+        val pts = zug.points
+        for (i in pts.indices) {
+            val a = pts[i]
+            val c = pts[(i + 1) % pts.size]
+            if ((a.y > p.y) != (c.y > p.y)) {
+                val x = a.x + (p.y - a.y) / (c.y - a.y) * (c.x - a.x)
+                if (p.x < x) drin = !drin
+            }
+        }
+        return drin
     }
 
     @Test

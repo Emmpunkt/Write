@@ -1,6 +1,8 @@
 package de.emmpunkt.write.data
 
 import de.emmpunkt.write.core.decor.RahmenForm
+import de.emmpunkt.write.core.decor.Zipfelseite
+import de.emmpunkt.write.core.geometry.Point
 import de.emmpunkt.write.core.geometry.boundingBox
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -162,6 +164,58 @@ class BlattUndRahmenTest {
 
         assertTrue(s.rahmenPasstAufsBlatt, "Der Textkasten selbst passt")
         assertFalse(s.zierrahmenPasstAufsBlatt, "Der Rahmen darum passt nicht mehr")
+    }
+
+    @Test
+    fun `die Sprechblase umschliesst den Textkasten, egal wohin der Zipfel zeigt`() {
+        // Am Geraet gefunden (2026-08-04): Bei Zipfel links stand der Text 6,4 mm neben der
+        // Blase. Ursache war, dass die Sprechblase den Streifen fuer den Zipfel aus dem
+        // bestellten Kasten herausschnitt, statt ihn aussen anzuhaengen.
+        val s = AppSettings(
+            rahmenXMm = 90f, rahmenYMm = 50f,
+            rahmenBreiteMm = 50f, rahmenHoeheMm = 50f,
+            rahmenForm = RahmenForm.SPRECHBLASE, rahmenAbstandMm = 4f,
+        )
+
+        Zipfelseite.entries.forEach { seite ->
+            val zuege = s.copy(zipfel = seite).zierrahmenZuege()
+            val umriss = zuege.single()
+            // Die vier Kantenmitten des TEXTkastens - in Rahmen-Koordinaten 0..50 x 0..50.
+            listOf(
+                Point(25f, 0.5f), Point(25f, 49.5f), Point(0.5f, 25f), Point(49.5f, 25f),
+            ).forEach { p ->
+                assertTrue(innerhalb(p, umriss), "Zipfel $seite: $p liegt ausserhalb der Blase")
+            }
+        }
+    }
+
+    @Test
+    fun `ein Zipfel, der ueber das Blatt hinausragt, wird gemeldet`() {
+        // Der Kasten passt, der Zipfel nicht: Er haengt aussen an und braucht eigenen Platz.
+        val s = AppSettings(
+            paperWidthMm = 148f, paperHeightMm = 105f,
+            rahmenXMm = 2f, rahmenYMm = 40f,
+            rahmenBreiteMm = 50f, rahmenHoeheMm = 50f,
+            rahmenForm = RahmenForm.SPRECHBLASE, rahmenAbstandMm = 1f,
+            zipfel = Zipfelseite.LINKS,
+        )
+
+        assertTrue(s.rahmenPasstAufsBlatt, "Der Textkasten selbst passt")
+        assertFalse(s.zierrahmenPasstAufsBlatt, "Der Zipfel ragt links ueber das Blatt")
+    }
+
+    /** Ray-Casting: liegt [p] innerhalb des geschlossenen Zuges? */
+    private fun innerhalb(p: Point, zug: de.emmpunkt.write.core.geometry.Polyline): Boolean {
+        var drin = false
+        val pts = zug.points
+        for (i in pts.indices) {
+            val a = pts[i]
+            val c = pts[(i + 1) % pts.size]
+            if ((a.y > p.y) != (c.y > p.y)) {
+                if (p.x < a.x + (p.y - a.y) / (c.y - a.y) * (c.x - a.x)) drin = !drin
+            }
+        }
+        return drin
     }
 
     @Test

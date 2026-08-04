@@ -34,7 +34,12 @@ enum class Zipfelseite(val bezeichnung: String) {
 }
 
 /**
- * Zeichnet den Rahmen in einen Kasten von [breiteMm] x [hoeheMm].
+ * Zeichnet einen Rahmen, der [breiteMm] x [hoeheMm] UMSCHLIESST.
+ *
+ * Die Masse beschreiben die eingeschlossene Flaeche, nicht die Aussenkante: Was eine Form
+ * darueber hinaus braucht - der Zipfel der Sprechblase - haengt aussen an und ragt hinaus. Der
+ * Aufrufer bestellt also den Bereich, der frei bleiben soll, und muss fuer die Platzpruefung
+ * die tatsaechliche Ausdehnung der Zuege heranziehen.
  *
  * Ursprung ist die linke untere Ecke, Y zeigt nach oben - dieselbe Konvention wie im Textsatz
  * und im G-Code. Der Aufrufer verschiebt die Zuege an ihren Platz.
@@ -141,49 +146,41 @@ private fun abgerundet(b: Float, h: Float, r: Float): Polyline {
  * wie ein Fehler in der Symmetrie, seitlich wie eine Sprechblase.
  */
 private fun sprechblase(b: Float, h: Float, zipfel: Zipfelseite): Polyline {
-    val r = eckradius(b, h)
     val laenge = minOf(b, h) * 0.18f
     val basis = minOf(b, h) * 0.14f
+    val kasten = abgerundet(b, h, eckradius(b, h))
 
-    // Der Kasten belegt nur den Teil, den der Zipfel uebrig laesst.
-    val untenFrei = zipfel == Zipfelseite.UNTEN_LINKS || zipfel == Zipfelseite.UNTEN_RECHTS
-    val kastenB = if (untenFrei) b else b - laenge
-    val kastenH = if (untenFrei) h - laenge else h
-    if (kastenB <= 2 * r || kastenH <= 2 * r) return abgerundet(b, h, eckradius(b, h))
-
-    val xVersatz = if (zipfel == Zipfelseite.LINKS) laenge else 0f
-    val yVersatz = if (untenFrei) laenge else 0f
-    val kasten = abgerundet(kastenB, kastenH, eckradius(kastenB, kastenH))
-        .translate(xVersatz, yVersatz)
-
-    // Der Zipfel wird als Umweg in den Umriss eingefuegt: drei Punkte an der passenden Kante.
+    // Der Zipfel haengt AUSSEN an. Ihn aus dem bestellten Kasten herauszuschneiden waere der
+    // naheliegende, aber falsche Weg: Der Aufrufer bestellt die Flaeche, die UMSCHLOSSEN werden
+    // soll - schrumpfte der Kasten um die Zipfellaenge, staende der Text daneben. Genau das ist
+    // am Geraet passiert (2026-08-04, Zipfel links: 6,4 mm Ueberstand).
     val spitze: Point
     val fussA: Point
     val fussB: Point
     when (zipfel) {
         Zipfelseite.UNTEN_LINKS -> {
-            val mitte = kastenB * 0.3f
-            fussA = Point(mitte - basis / 2f, yVersatz)
-            fussB = Point(mitte + basis / 2f, yVersatz)
-            spitze = Point(mitte - basis, 0f)
+            val mitte = b * 0.3f
+            fussA = Point(mitte - basis / 2f, 0f)
+            fussB = Point(mitte + basis / 2f, 0f)
+            spitze = Point(mitte - basis, -laenge)
         }
         Zipfelseite.UNTEN_RECHTS -> {
-            val mitte = kastenB * 0.7f
-            fussA = Point(mitte - basis / 2f, yVersatz)
-            fussB = Point(mitte + basis / 2f, yVersatz)
-            spitze = Point(mitte + basis, 0f)
+            val mitte = b * 0.7f
+            fussA = Point(mitte - basis / 2f, 0f)
+            fussB = Point(mitte + basis / 2f, 0f)
+            spitze = Point(mitte + basis, -laenge)
         }
         Zipfelseite.LINKS -> {
-            val mitte = kastenH * 0.7f
-            fussA = Point(xVersatz, mitte + basis / 2f)
-            fussB = Point(xVersatz, mitte - basis / 2f)
-            spitze = Point(0f, mitte + basis)
+            val mitte = h * 0.7f
+            fussA = Point(0f, mitte + basis / 2f)
+            fussB = Point(0f, mitte - basis / 2f)
+            spitze = Point(-laenge, mitte + basis)
         }
         Zipfelseite.RECHTS -> {
-            val mitte = kastenH * 0.7f
-            fussA = Point(kastenB, mitte - basis / 2f)
-            fussB = Point(kastenB, mitte + basis / 2f)
-            spitze = Point(b, mitte + basis)
+            val mitte = h * 0.7f
+            fussA = Point(b, mitte - basis / 2f)
+            fussB = Point(b, mitte + basis / 2f)
+            spitze = Point(b + laenge, mitte + basis)
         }
     }
 
